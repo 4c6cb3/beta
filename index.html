@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="memoly - 暗記フラッシュカード・早押しクイズアプリ">
+  <meta name="theme-color" content="#2563eb">
+  <title>memoly</title>
+  
+  <link rel="icon" href="logo_web.png" type="image/png">
+  <link rel="apple-touch-icon" href="logo_app.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="theme-device">
+  <div class="container">
+    
+    <!-- メインメニュー画面 -->
+    <section id="menu-screen" class="screen">
+      <div class="fixed-header-area">
+        <header>
+          <h1 class="app-logo">
+            <img src="logo_hedder.png" alt="memoly" class="app-logo-img">
+          </h1>
+        </header>
+
+        <div class="menu-nav">
+          <div style="display: flex; gap: 4px;">
+            <button type="button" class="btn-secondary" onclick="showNewDeckModal()">＋作成</button>
+            <button type="button" class="btn-secondary" onclick="openTrashModal()">🗑ゴミ箱</button>
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <button type="button" class="btn-option-link" onclick="openCsvImportModal()">📥CSV</button>
+            <button type="button" class="btn-option-link" onclick="showStats()">📊記録</button>
+            <button type="button" class="btn-option-link" onclick="showOption()">⚙設定</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="scrollable-content">
+        <div id="deck-list" class="deck-list"></div>
+      </div>
+    </section>
+
+    <!-- 学習記録・統計画面 -->
+    <section id="stats-screen" class="screen hidden">
+      <div class="fixed-header-area">
+        <header class="screen-header">
+          <button type="button" class="btn-back" onclick="showMenu()">← メニューに戻る</button>
+          <h2>学習データと努力量</h2>
+        </header>
+
+        <div class="stats-tab-nav">
+          <button type="button" id="tab-btn-daily" class="tab-btn active" onclick="switchStatsTab('daily')">日ごとの記録</button>
+          <button type="button" id="tab-btn-cards" class="tab-btn" onclick="switchStatsTab('cards')">学習カード</button>
+          <button type="button" id="tab-btn-achievements" class="tab-btn hidden" onclick="switchStatsTab('achievements')">称号</button>
+        </div>
+      </div>
+
+      <div class="scrollable-content">
+        <!-- タブ1: 日ごとの記録 -->
+        <div id="stats-tab-daily">
+          <div class="streak-card">
+            <div class="streak-count">🔥 <span id="streak-days">0</span> 日連続勉強中！！</div>
+            <div id="streak-message" class="streak-message">まずは今日、最初の1枚を挑戦してみよう！</div>
+          </div>
+
+          <div class="calendar-card">
+            <div class="calendar-header">
+              <button type="button" class="btn-small" onclick="changeCalendarMonth(-1)">← 前月</button>
+              <h3 id="calendar-title"></h3>
+              <button type="button" class="btn-small" onclick="changeCalendarMonth(1)">次月 →</button>
+            </div>
+            <div id="calendar-grid" class="calendar-grid"></div>
+
+            <div id="selected-day-detail" class="selected-day-box" style="margin-top: 12px; padding: 10px; border-top: 1px solid var(--card-border);">
+              <div style="font-weight: bold; font-size: 0.9em; margin-bottom: 4px; color: var(--header-text);" id="selected-day-title">本日の学習記録</div>
+              <div style="display: flex; justify-content: space-around; font-size: 0.9em;">
+                <div>学習枚数: <strong id="selected-day-cards" style="color: var(--accent-color);">0</strong> 枚</div>
+                <div>学習時間: <strong id="selected-day-time" style="color: var(--accent-color);">0分</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="option-group" style="margin-top: 12px;">
+            <h3>📈 全期間の学習スタッツ</h3>
+            <div class="all-time-stats-grid">
+              <div class="stat-summary-item" style="background: var(--bg-color); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+                <div style="font-size: 0.75em; color: var(--text-sub);">全期間のプレイ時間</div>
+                <div id="stat-total-time" style="font-size: 1.25em; font-weight: bold; color: var(--header-text); margin-top: 2px;">0分</div>
+              </div>
+              <div class="stat-summary-item" style="background: var(--bg-color); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+                <div style="font-size: 0.75em; color: var(--text-sub);">総学習カード枚数</div>
+                <div id="stat-total-studied-cards" style="font-size: 1.25em; font-weight: bold; color: var(--header-text); margin-top: 2px;">0枚</div>
+              </div>
+              <div class="stat-summary-item" style="background: var(--bg-color); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+                <div style="font-size: 0.75em; color: var(--text-sub);">新規出題カード枚数</div>
+                <div id="stat-total-new-cards" style="font-size: 1.25em; font-weight: bold; color: var(--header-text); margin-top: 2px;">0枚</div>
+              </div>
+              <div class="stat-summary-item" style="background: var(--bg-color); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+                <div style="font-size: 0.75em; color: var(--text-sub);">暗記済み★の枚数</div>
+                <div id="stat-total-star-cards" style="font-size: 1.25em; font-weight: bold; color: #8b5cf6; margin-top: 2px;">0枚</div>
+              </div>
+              <div class="stat-summary-item" style="background: var(--bg-color); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+                <div style="font-size: 0.75em; color: var(--text-sub);">プレイしたデッキ数</div>
+                <div id="stat-played-decks-count" style="font-size: 1.25em; font-weight: bold; color: var(--header-text); margin-top: 2px;">0</div>
+              </div>
+              <div class="stat-summary-item" style="background: var(--bg-color); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+                <div style="font-size: 0.75em; color: var(--text-sub);">暗記済み(100%)デッキ</div>
+                <div id="stat-mastered-decks-count" style="font-size: 1.25em; font-weight: bold; color: #10b981; margin-top: 2px;">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- タブ2: 学習カード一覧 -->
+        <div id="stats-tab-cards" class="hidden">
+          <div class="option-group">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+              <select id="stats-range-select" class="btn-secondary" style="font-size: 0.9em; padding: 6px 12px; height: auto;" onchange="renderTodayStudiedList()">
+                <option value="TODAY" selected>本日</option>
+                <option value="ALL">歴代</option>
+              </select>
+              <span style="font-size: 1.1em; font-weight: bold; color: var(--header-text);">学習したカード</span>
+              <select id="stats-deck-select" class="btn-secondary" style="font-size: 0.9em; padding: 6px 12px; height: auto; margin-left: auto; max-width: 180px;" onchange="renderTodayStudiedList()">
+                <option value="ALL_DECKS">すべてのデッキ</option>
+              </select>
+            </div>
+            
+            <p class="help-text" style="margin-bottom: 8px; font-size: 0.8em; color: var(--text-sub);">「もう一度」を選択した回数を表示しています</p>
+            
+            <div class="sort-controls" style="display: flex; gap: 12px; margin-bottom: 12px; font-size: 0.85em;">
+              <label class="radio-label">
+                <input type="radio" name="today-sort-option" value="RECENT" checked onchange="changeTodayCardsSortOrder('RECENT')">
+                <span>最後に学習した順</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="today-sort-option" value="AGAIN" onchange="changeTodayCardsSortOrder('AGAIN')">
+                <span>「もう一度」が多かった順</span>
+              </label>
+            </div>
+
+            <div id="today-studied-list" class="card-list-container" style="max-height: 400px;"></div>
+          </div>
+        </div>
+
+        <!-- タブ3: 称号 -->
+        <div id="stats-tab-achievements" class="hidden">
+          <div class="option-group" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(139, 92, 246, 0.15)); border-color: var(--accent-color);">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+              <h3 style="margin-bottom: 0; color: var(--header-text);">Lv.<span id="user-level" style="font-size: 1.3em; color: var(--accent-color);">1</span> <span id="user-rank-title" style="font-size: 0.85em; color: var(--text-sub); font-weight: normal;">(見習い記憶士)</span></h3>
+              <span style="font-size: 0.85em; font-weight: bold; color: var(--text-sub);"><span id="user-current-exp">0</span> / <span id="user-next-exp">100</span> EXP</span>
+            </div>
+            <div style="width: 100%; height: 10px; background: var(--bg-color); border-radius: 5px; overflow: hidden; border: 1px solid var(--card-border);">
+              <div id="exp-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); transition: width 0.3s ease;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.75em; color: var(--text-sub); margin-top: 4px;">
+              <span>累計獲得EXP: <strong id="total-accumulated-exp">0</strong></span>
+              <span>累計学習: <strong id="total-cards-all-time">0</strong> 枚</span>
+            </div>
+          </div>
+
+          <div class="option-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="margin-bottom: 0;">🎯 今日の目標</h3>
+              <button type="button" class="btn-small" onclick="openGoalSettingModal()">目標を編集</button>
+            </div>
+            <div id="goals-container" style="display: flex; flex-direction: column; gap: 10px;">
+              <div id="goal-card-count-item">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 4px;">
+                  <span>学習枚数: <strong id="goal-card-current">0</strong> / <span id="goal-card-target">50</span> 枚</span>
+                  <span id="goal-card-percent" style="font-weight: bold; color: var(--accent-color);">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: var(--bg-color); border-radius: 4px; overflow: hidden; border: 1px solid var(--card-border);">
+                  <div id="goal-card-progress-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.3s;"></div>
+                </div>
+              </div>
+
+              <div id="goal-time-item">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 4px;">
+                  <span>学習時間: <strong id="goal-time-current">0</strong> / <span id="goal-time-target">15</span> 分</span>
+                  <span id="goal-time-percent" style="font-weight: bold; color: var(--accent-color);">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: var(--bg-color); border-radius: 4px; overflow: hidden; border: 1px solid var(--card-border);">
+                  <div id="goal-time-progress-bar" style="width: 0%; height: 100%; background: #3b82f6; transition: width 0.3s;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="option-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="margin-bottom: 0;">🏆 称号コレクション</h3>
+              <span style="font-size: 0.85em; font-weight: bold; color: var(--accent-color);"><span id="unlocked-achievements-count">0</span> / 30 獲得</span>
+            </div>
+            <p class="help-text" style="margin-bottom: 12px; font-size: 0.8em;">学習の継続、枚数、時間、レベルアップに応じて称号がアンロックされます。</p>
+            <div id="achievements-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;"></div>
+          </div>
+        </div>
+      </div> 
+    </section>
+
+    <!-- オプションメイン画面 -->
+    <section id="option-screen" class="screen hidden">
+      <div class="fixed-header-area">
+        <header class="screen-header">
+          <button type="button" class="btn-back" onclick="showMenu()">← メニューに戻る</button>
+          <h2>オプション</h2>
+        </header>
+      </div>
+
+      <div class="scrollable-content">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button type="button" class="btn-secondary" style="padding: 15px; font-size: 1.05em; text-align: left;" onclick="showOptScreen('opt-learning-screen')">📚 学習設定</button>
+          <button type="button" class="btn-secondary" style="padding: 15px; font-size: 1.05em; text-align: left;" onclick="showOptScreen('opt-display-screen')">🎨 表示・操作設定</button>
+          <button type="button" class="btn-secondary" style="padding: 15px; font-size: 1.05em; text-align: left;" onclick="showOptScreen('opt-deck-screen')">🗂️ デッキ・カード管理</button>
+          <button type="button" class="btn-secondary" style="padding: 15px; font-size: 1.05em; text-align: left;" onclick="showOptScreen('opt-custom-screen')">🧩 カスタム設定（復習＆リザルト・称号）</button>
+          <button type="button" class="btn-secondary" style="padding: 15px; font-size: 1.05em; text-align: left;" onclick="showOptScreen('opt-data-screen')">💾 データ管理</button>
+          
+          <div class="option-group" style="margin-bottom: 0; border-color: rgba(239, 68, 68, 0.3);">
+            <h3 style="color: #ef4444; margin-bottom: 8px;">⚠️ 高度な操作</h3>
+            <p class="help-text" style="margin-bottom: 12px; font-size: 0.8em;">設定やデータを初期状態に戻します。操作の取り消しはできません。</p>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <button type="button" class="btn-secondary" style="padding: 12px; font-size: 0.95em; text-align: left; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="resetAllSettingsSafe()">⚙️ 設定初期化（設定のみリセット）</button>
+              <button type="button" class="btn-secondary" style="padding: 12px; font-size: 0.95em; text-align: left; color: #ffffff; background-color: #ef4444; border-color: #ef4444; font-weight: bold;" onclick="factoryResetAllDataSafe()">⚠️ 完全初期化（全データ削除・初期状態へ）</button>
+            </div>
+          </div>
+          
+          <hr style="border:none; border-top:1px solid var(--card-border); margin: 4px 0;">
+
+          <div class="option-group" style="margin-bottom: 0;">
+            <h3>競技クイズ者向け</h3>
+            <p class="help-text" style="margin-bottom: 8px;">問題集の購入・検索に役立つ外部サイトです。</p>
+            <div class="external-link-buttons">
+              <a href="https://booth.pm/ja/search/%E3%82%AF%E3%82%A4%E3%82%BA%E5%95%8F%E9%A1%8C%E9%9B%86" target="_blank" rel="noopener noreferrer" class="btn-external-link">🛒 BOOTH (クイズ問題集検索) ↗</a>
+              <a href="https://q-tak.com/" target="_blank" rel="noopener noreferrer" class="btn-external-link">🚚 クイズ宅急便 ↗</a>
+            </div>
+          </div>
+
+          <div class="option-group" style="text-align: center; margin-bottom: 0;">
+            <a href="https://github.com/4c6cb3/my_flashcard_app" target="_blank" rel="noopener noreferrer" class="btn-external-link">更新履歴</a>
+          </div>
+          
+          <div class="app-footer-credit">created by 4c6cb3 - ver.2.0.0</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- サブ3-1: 学習設定 -->
+    <section id="opt-learning-screen" class="screen hidden">
+      <div class="fixed-header-area">
+        <header class="screen-header">
+          <button type="button" class="btn-back" onclick="showOption()">← オプションに戻る</button>
+          <h2>📚 学習設定</h2>
+        </header>
+      </div>
+
+      <div class="scrollable-content">
+        <div class="option-group">
+          <h3>デフォルト学習モード</h3>
+          <div class="option-controls">
+            <label class="radio-label"><input type="radio" name="mode-option" value="NORMAL" onchange="changeMode('NORMAL')"><span>ノーマルモード（デフォルト）</span></label>
+            <label class="radio-label"><input type="radio" name="mode-option" value="FAST" onchange="changeMode('FAST')"><span>読み上げ風モード</span></label>
+          </div>
+          <p id="mode-description-text" class="mode-description" style="margin-top: 12px; font-size: 0.85em; color: var(--text-sub);"></p>
+        </div>
+
+        <div id="speed-option-group" class="option-group">
+          <h3>文字表示スピード</h3>
+          <div class="speed-control-container">
+            <label for="char-speed-range">表示速度: <span id="speed-value-display">150</span> ms/文字</label>
+            <input type="range" id="char-speed-range" min="50" max="300" step="10" value="150" oninput="updateCharSpeed(this.value)">
+            <div class="speed-labels"><span>速い (50ms)</span><span>遅い (300ms)</span></div>
+          </div>
+          <p id="speed-disabled-notice" class="help-text" style="color: #ef4444; font-size: 0.8em; margin-top: 4px; display: none;">※「読み上げ風モード」の場合のみ設定が可能です。</p>
+          <div class="preview-box" style="margin-top: 8px;">
+            <div class="preview-label">スピード確認プレビュー:</div>
+            <div id="preview-text-container" class="preview-text"></div>
+          </div>
+        </div>
+
+        <div class="option-group">
+          <h3>暗記学習カスタマイズ</h3>
+          <div class="option-controls">
+            <label class="radio-label"><input type="checkbox" id="toggle-long-press" onchange="toggleLongPressOption(this.checked)"><span>長押しでの1文字ずつ表示機能を有効にする</span></label>
+            
+            <div id="hold-q-group">
+              <div class="speed-control-container" style="margin-top: 8px;">
+                <label for="hold-speed-q-range" style="font-size: 0.9em; font-weight: bold;">【問題文】 長押し文字送り速度: <span id="hold-speed-q-display">0.2</span> 秒/文字</label>
+                <input type="range" id="hold-speed-q-range" min="0.1" max="2.0" step="0.1" value="0.2" oninput="updateHoldSpeedQ(this.value)">
+              </div>
+              <div class="preview-box" style="margin-top: 8px;">
+                <div class="preview-label">問題文の長押しスピード確認:</div>
+                <div id="hold-preview-q-text-container" class="preview-text" style="color: var(--header-text); min-height: 2em; line-height: 1.5; font-size: var(--preview-font-size);">山梨県と静岡県にまたがる、</div>
+                <div id="hold-preview-q-touch-area" style="height: 50px; background: var(--bg-color); border: 2px dashed var(--card-border); border-radius: 6px; margin-top: 8px; display:flex; align-items:center; justify-content:center; user-select:none; cursor:pointer;">
+                  <span style="color: var(--text-sub); font-size: 0.85em; font-weight: bold; pointer-events: none;">ここを長押ししてテスト</span>
+                </div>
+              </div>
+            </div>
+            
+            <hr style="border:none; border-top:1px dashed var(--card-border); margin: 6px 0;">
+
+            <div id="hold-a-group">
+              <div class="speed-control-container" style="margin-top: 8px;">
+                <label for="hold-speed-a-range" style="font-size: 0.9em; font-weight: bold;">【解　答】 長押し文字送り速度: <span id="hold-speed-a-display">1.0</span> 秒/文字</label>
+                <input type="range" id="hold-speed-a-range" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateHoldSpeedA(this.value)">
+              </div>
+              <div class="preview-box" style="margin-top: 8px;">
+                <div class="preview-label">解答の長押しスピード確認:</div>
+                <div id="hold-preview-a-text-container" class="preview-text" style="color: var(--header-text); min-height: 2em; line-height: 1.5; font-size: var(--preview-font-size);"></div>
+                <div id="hold-preview-a-touch-area" style="height: 50px; background: var(--bg-color); border: 2px dashed var(--card-border); border-radius: 6px; margin-top: 8px; display:flex; align-items:center; justify-content:center; user-select:none; cursor:pointer;">
+                  <span style="color: var(--text-sub); font-size: 0.85em; font-weight: bold; pointer-events: none;">ここを長押ししてテスト</span>
+                </div>
+              </div>
+            </div>
+
+            <hr style="border:none; border-top:1px solid var(--card-border); margin: 6px 0;">
+            <label class="radio-label"><input type="checkbox" id="toggle-card-level" onchange="toggleCardLevelOption(this.checked)"><span>暗記レベル（0, 1〜10+★）を表示する</span></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- サブ3-2: カスタム設定 -->
+    <section id="opt-custom-screen" class="screen hidden">
+      <div class="fixed-header-area">
+        <header class="screen-header">
+          <button type="button" class="btn-back" onclick="showOption()">← オプションに戻る</button>
+          <h2>🧩 カスタム設定</h2>
+        </header>
+      </div>
+
+      <div class="scrollable-content">
+        <div class="option-group">
+          <h3>📊 復習機能・リザルト表示</h3>
+          <p class="help-text" style="margin-bottom: 10px;">一定枚数を解いた際、または途中で中断した際に、デッキの定着度やカードのレベル変動をリザルト表示します。</p>
+          <div class="option-controls">
+            <label class="radio-label">
+              <input type="checkbox" id="toggle-review-result" onchange="toggleReviewResultOption(this.checked)">
+              <span>復習機能（リザルト表示）を有効にする</span>
+            </label>
+          </div>
+
+          <div id="review-interval-container" style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--card-border);">
+            <label for="review-interval-input" style="font-size: 0.9em; font-weight: bold; color: var(--header-text); display: block; margin-bottom: 6px;">
+              リザルトを表示する間隔（枚数）:
+            </label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="number" id="review-interval-input" class="input-field" min="10" max="1000" step="1" value="50" style="max-width: 120px;" onchange="updateReviewInterval(this.value)">
+              <span style="font-size: 0.9em; font-weight: bold; color: var(--text-sub);">枚ごと（初期値: 50）</span>
+            </div>
+            <p class="help-text" style="margin-top: 6px; font-size: 0.8em;">※指定枚数に達する前に「メニューに戻る」を押した場合もリザルトが表示されます。</p>
+          </div>
+        </div>
+
+        <div class="option-group">
+          <h3>🎮 ゲーム機能（称号・レベル・目標）</h3>
+          <p class="help-text" style="margin-bottom: 10px;">カード学習ごとに経験値(EXP)を獲得してレベルアップしたり、称号（全30種）のアンロックやデイリー目標設定が可能になります。</p>
+          <div class="option-controls">
+            <label class="radio-label">
+              <input type="checkbox" id="toggle-gamification" onchange="toggleGamificationOption(this.checked)">
+              <span>ゲーム機能を有効にする</span>
+            </label>
+          </div>
+          <p class="help-text" style="margin-top: 8px; font-size: 0.8em; color: var(--text-sub);">※有効化すると「📊記録」画面に「称号」タブが追加されます。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- サブ3-3: 表示・操作設定 -->
+    <section id="opt-display-screen" class="screen hidden">
+      <div class="fixed-header-area">
+        <header class="screen-header">
+          <button type="button" class="btn-back" onclick="showOption()">← オプションに戻る</button>
+          <h2>🎨 表示・操作設定</h2>
+        </header>
+      </div>
+
+      <div class="scrollable-content">
+        <div class="option-group">
+          <h3>カラーテーマ</h3>
+          <div class="option-controls">
+            <label class="radio-label"><input type="radio" name="theme-option" value="device" onchange="changeTheme('device')"><span>デバイスの設定に従う</span></label>
+            <label class="radio-label"><input type="radio" name="theme-option" value="light" onchange="changeTheme('light')"><span>ライト</span></label>
+            <label class="radio-label"><input type="radio" name="theme-option" value="dark" onchange="changeTheme('dark')"><span>ダーク</span></label>
+          </div>
+        </div>
+
+        <div class="option-group">
+          <h3>アプリ全体の文字の大きさ</h3>
+          <div class="speed-control-container">
+            <label for="font-size-range">文字サイズ: <span id="font-size-value-display">15</span> px</label>
+            <input type="range" id="font-size-range" min="12" max="24" step="1" value="15" oninput="updateFontSizePreview(this.value)">
+            <div class="speed-labels"><span>小 (12px)</span><span>大 (24px)</span></div>
+          </div>
+          <div class="preview-box" style="margin-top: 12px;">
+            <div class="preview-label">文字サイズ確認プレビュー:</div>
+            <div id="font-size-preview-box" class="preview-font-sample">
+              <div id="font-size-preview-q" class="preview-q-text">山梨県と静岡県にまたがる、日本で一番高い山は何でしょう？</div>
+              <div id="font-size-preview-a" class="preview-a-text">正解：富士山</div>
+            </div>
+          </div>
+          <button type="button" class="btn-start" style="margin-top: 12px;" onclick="applyAndSaveFontSize()">文字サイズの設定を保存</button>
+        </div>
+
+        <div class="option-group">
+          <h3>💻 パソコンでのキーボード操作設定</h3>
+          <table class="shortcut-table">
+            <thead><tr><th>操作</th><th>キー設定</th></tr></thead>
+            <tbody>
+              <tr><td>問題ストップ/解答表示</td><td><button type="button" class="shortcut-key" id="key-bind-advance" onclick="startKeyBinding('advance')">Space</button></td></tr>
+              <tr><td>「もう一度」</td><td><button type="button" class="shortcut-key" id="key-bind-again" onclick="startKeyBinding('again')">1</button></td></tr>
+              <tr><td>「難しい」</td><td><button type="button" class="shortcut-key" id="key-bind-hard" onclick="startKeyBinding('hard')">2</button></td></tr>
+              <tr><td>「ふつう」</td><td><button type="button" class="shortcut-key" id="key-bind-good" onclick="startKeyBinding('good')">3</button></td></tr>
+              <tr><td>「簡単」</td><td><button type="button" class="shortcut-key" id="key-bind-easy" onclick="startKeyBinding('easy')">4</button></td></tr>
+            </tbody>
+          </table>
+          <button type="button" class="btn-small" style="margin-top: 10px; width: 100%;" onclick="resetKeyBinds()">キー割り当てをデフォルトに戻す</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- サブ3-4: デッキ・カード管理 -->
+    <section id="opt-deck-screen" class="screen hidden">
+      <div class="fixed-header-area">
+        <header class="screen-header">
+          <button type="button" class="btn-back" onclick="showOption()">← オプションに戻る</button>
+          <h2>🗂️ デッキ・カード管理</h2>
+        </header>
+      </div>
+
+      <div class="scrollable-content">
+        <div class="option-group">
+          <h3>デッキの並び順</h3>
+          <div class="option-controls">
+            <label class="radio-label"><input type="radio" name="sort-option" value="RECENT" onchange="changeDeckSortOrder('RECENT')"><span>最近学習した順（デフォルト）</span></label>
+            <label class="radio-label"><input type="radio" name="sort-option" value="CREATED" onchange="changeDeckSortOrder('CREATED')"><span>作成・追加順</span></label>
+          </div>
+        </div>
+
+        <div class="option-group">
+          <h3>👀 非表示カードの管理（全デッキ）</h3>
+          <p class="help-text" style="margin-bottom: 8px;">出題から除外したカードを確認し、再表示させることができます。</p>
+          <button type="button" class="btn-small" style="padding: 10px; width: 100%; font-weight: bold;" onclick="openAllHiddenCardsModal()">すべての非表示カードを確認・復元する</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- サブ3-5: データ管理 -->
+    <section id="opt-data-screen" class="screen hidden">
+      <div class="fixed-header-area">
+        <header class="screen-header">
+          <button type="button" class="btn-back" onclick="showOption()">← オプションに戻る</button>
+          <h2>💾 データ管理</h2>
+        </header>
+      </div>
+
+      <div class="scrollable-content">
+        <div class="option-group">
+          <h3>データのバックアップと書き出し</h3>
+          <p class="help-text" style="margin-bottom: 12px;">アプリの全データを保存・復元したり、問題データを他のアプリ用に書き出すことができます。</p>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button type="button" class="btn-small" style="background-color: #059669; color: white; font-weight: bold; padding: 10px;" onclick="exportAllDataBackup()">全データをバックアップ (JSON)</button>
+            <button type="button" class="btn-small" style="background-color: #2563eb; color: white; font-weight: bold; padding: 10px;" onclick="document.getElementById('backup-import-input').click()">バックアップから復元</button>
+            <input type="file" id="backup-import-input" accept=".json" style="display: none;" onchange="importAllDataBackup(event)">
+            
+            <hr style="border:none; border-top:1px solid var(--card-border); margin: 4px 0;">
+            <p class="help-text" style="margin-bottom: 4px; font-size: 0.8em;">※学習記録を含まない純粋な問題データのみ出力します。</p>
+            <button type="button" class="btn-small" style="padding: 10px;" onclick="openCsvExportModal()">問題データを CSV で書き出し</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- クイズ学習画面 -->
+    <section id="quiz-screen" class="screen quiz-layout hidden">
+      <header class="quiz-header">
+        <button type="button" class="btn-back" onclick="handleQuizBackAction()">← メニューに戻る</button>
+        <h2 id="current-deck-title">デッキ名</h2>
+        <div id="progress-info">残り: 0枚</div>
+      </header>
+
+      <div style="display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+        <button type="button" id="undo-btn" class="btn-undo-redo" onclick="undoLastAnswer(event)" disabled>Undo</button>
+        <button type="button" id="redo-btn" class="btn-undo-redo" onclick="redoLastAnswer(event)" disabled>Redo</button>
+      </div>
+
+      <main id="quiz-card" class="card">
+        <div id="card-level-badge" class="card-level-badge hidden">暗記レベル1</div>
+
+        <div class="question-container">
+          <p id="question-text" class="card-question"></p>
+        </div>
+
+        <div id="result-stats" class="stats hidden">
+          <span id="stat-progress">読み上げ率: --%</span> | 
+          <span id="stat-time">タイム: --秒</span>
+        </div>
+
+        <div id="answer-section" class="answer-section hidden">
+          <hr class="hide-on-hold">
+          <h2 style="margin-bottom:0;">正解：<span id="answer-text"></span></h2>
+          <div id="answer-image-container" class="answer-image-container hidden hide-on-hold">
+            <img id="answer-image" src="" alt="参考画像" class="answer-img">
+          </div>
+          <p id="explanation-text" class="hide-on-hold"></p>
+          
+          <div class="search-btn-container hide-on-hold" style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="google-search-btn" class="btn-small" style="background: var(--bg-color);" onclick="searchOnGoogle(event)">
+              🔍 Googleで「<span id="search-term-text"></span>」を検索
+            </button>
+            <button type="button" class="btn-small" style="background: var(--bg-color);" onclick="openEditCurrentQuizCard(event)">
+              ✏️ このカードを編集
+            </button>
+            <button type="button" class="btn-small" style="background: var(--bg-color);" onclick="hideCurrentCard(event)">
+              👀 カードを非表示
+            </button>
+          </div>
+        </div>
+      </main>
+
+      <div class="quiz-footer">
+        <div id="tap-hint" class="tap-hint">画面タップ または [Space] キーで操作</div>
+
+        <footer id="action-buttons" class="button-grid hidden">
+          <button type="button" class="btn btn-again" onclick="handleAnswer('again')">もう一度<small>&lt; 1分 [<span id="btn-key-again">1</span>]</small></button>
+          <button type="button" class="btn btn-hard" onclick="handleAnswer('hard')">難しい<small>12時間後 [<span id="btn-key-hard">2</span>]</small></button>
+          <button type="button" class="btn btn-good" onclick="handleAnswer('good')">ふつう<small>1日後 [<span id="btn-key-good">3</span>]</small></button>
+          <button type="button" class="btn btn-easy" onclick="handleAnswer('easy')">簡単<small>4日後 [<span id="btn-key-easy">4</span>]</small></button>
+        </footer>
+      </div>
+    </section>
+
+    <!-- セッションリザルト画面 -->
+    <section id="result-screen" class="screen hidden">
+      <div class="fixed-header-area">
+        <header class="screen-header">
+          <button type="button" class="btn-back" onclick="exitQuizToMenu()">← メニューに戻る</button>
+          <h2 id="result-screen-title">学習セッション結果</h2>
+        </header>
+      </div>
+
+      <div class="scrollable-content">
+        <div class="option-group" style="text-align: center; padding: 20px; border-color: var(--card-border);">
+          <div style="font-size: 0.85em; font-weight: bold; color: var(--text-sub);">デッキ定着率</div>
+          <div class="streak-count" style="font-size: 2.4em; font-weight: bold; margin: 4px 0; color: #10b981;">
+            <span id="result-deck-retention">0.00</span>%
+          </div>
+          <div style="font-size: 0.85em; color: var(--text-sub);">今回のセッション学習: <strong id="result-session-card-count" style="color: var(--header-text);">0</strong> 枚</div>
+        </div>
+
+        <div class="option-group" style="margin-top: 10px;">
+          <h3>学習したカードとレベル変動</h3>
+          <p class="help-text" style="margin-bottom: 10px; font-size: 0.8em;">カード枠と背景の色は選択した評価（もう一度/難しい/ふつう/簡単）を表しています。</p>
+          <div id="result-card-list-container" class="card-list-container" style="max-height: 380px;"></div>
+        </div>
+      </div>
+
+      <div style="padding-top: 10px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;">
+        <button type="button" id="btn-resume-quiz" class="btn-start" onclick="resumeNextStudySession()">学習に戻る (次のセッションへ)</button>
+        <button type="button" id="btn-exit-quiz" class="btn-secondary" style="padding: 10px; text-align: center;" onclick="exitQuizToMenu()">学習を終了する (メニューへ)</button>
+      </div>
+    </section>
+
+    <!-- 各種モーダル -->
+    <div id="csv-import-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>📥 CSVからデッキを追加</h3>
+        <p class="help-text">フォーマット1: 問題文, 答え, 解説 (ヘッダーなし)<br>フォーマット2: Newmonic形式対応</p>
+        <div id="drop-zone" class="drop-zone"><p>ここにファイルをドラッグ＆ドロップ<br>または下のボタンから選択</p></div>
+        <div class="file-input-wrapper" style="margin: 12px 0;"><input type="file" id="csv-file-input" accept=".csv" class="input-field"></div>
+        <div class="modal-buttons"><button type="button" class="btn-modal-cancel" onclick="closeCsvImportModal()">閉じる</button></div>
+      </div>
+    </div>
+
+    <div id="csv-confirm-modal" class="modal hidden modal-top">
+      <div class="modal-content">
+        <h3>📥 デッキの追加確認</h3>
+        <p class="help-text">作成するデッキ名を確認・変更してください。</p>
+        <div style="display: flex; flex-direction: column; gap: 6px; margin: 8px 0;">
+          <label for="csv-deck-name-input" style="font-size: 0.85em; font-weight: bold;">デッキ名:</label>
+          <input type="text" id="csv-deck-name-input" class="input-field" placeholder="デッキ名を入力">
+          <p id="csv-confirm-card-count" class="help-text" style="font-size: 0.8em; color: var(--accent-color); font-weight: bold;"></p>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-modal-cancel" onclick="closeCsvConfirmModal()">キャンセル</button>
+          <button type="button" class="btn-modal-submit" onclick="submitCsvImport()">この名前で追加</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="csv-export-modal" class="modal hidden modal-top">
+      <div class="modal-content">
+        <h3>📤 CSV書き出し</h3>
+        <p class="help-text">どのデッキを書き出しますか？</p>
+        <div class="option-controls" style="margin: 12px 0;">
+          <select id="export-deck-select" class="input-field" style="height: 40px; padding: 5px 10px;">
+            <option value="ALL">すべてのデッキ</option>
+          </select>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-modal-cancel" onclick="closeCsvExportModal()">キャンセル</button>
+          <button type="button" class="btn-modal-submit" onclick="submitCsvExport()">書き出し</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- デッキ設定モーダル -->
+    <div id="deck-settings-modal" class="modal hidden">
+      <div class="modal-content modal-large">
+        <h3>⚙ デッキ設定</h3>
+        <p id="deck-settings-title" class="help-text" style="margin-bottom: 8px; font-weight: bold;"></p>
+        
+        <div class="option-controls" style="margin-bottom: 12px;">
+          <div style="font-weight: bold; font-size: 0.9em; margin-bottom: 4px; color: var(--header-text);">出題順モード:</div>
+          <label class="radio-label"><input type="radio" name="deck-order-option" value="SHUFFLE"><span>シャッフルモード（ランダム出題）</span></label>
+          <label class="radio-label"><input type="radio" name="deck-order-option" value="ORDER"><span>順番モード（リスト登録順）</span></label>
+          <label class="radio-label"><input type="radio" name="deck-order-option" value="WEAK"><span>苦手特化モード（定着率が低い順）</span></label>
+        </div>
+
+        <hr style="border:none; border-top:1px dashed var(--card-border); margin: 8px 0;">
+        <div class="option-controls" style="margin-bottom: 12px;">
+          <label class="radio-label">
+            <input type="checkbox" id="deck-exclude-star-option">
+            <span>暗記済みカード（レベル★）を出題から除外</span>
+          </label>
+        </div>
+
+        <hr style="border:none; border-top:1px dashed var(--card-border); margin: 8px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+          <span style="font-size: 0.85em; font-weight: bold; color: var(--header-text);">非表示カードの管理:</span>
+          <button type="button" class="btn-small" onclick="openDeckHiddenCardsModal()">このデッキの非表示カードを確認</button>
+        </div>
+
+        <div class="modal-buttons" style="margin-top: 14px;">
+          <button type="button" class="btn-modal-cancel" onclick="closeDeckSettingsModal()">キャンセル</button>
+          <button type="button" class="btn-modal-submit" onclick="submitDeckSettings()">設定を保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="trash-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="trash-header">
+          <h3>🗑 ゴミ箱</h3>
+          <button type="button" id="trash-clear-all-btn" class="btn-small btn-small-danger" onclick="clearAllTrash()">すべて削除</button>
+        </div>
+        <div id="trash-list-container" class="card-list-container" style="max-height: 300px;"></div>
+        <div class="modal-buttons" style="margin-top: 12px;">
+          <button type="button" class="btn-modal-cancel" onclick="closeTrashModal()">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="hidden-cards-modal" class="modal hidden modal-top">
+      <div class="modal-content modal-large">
+        <div class="trash-header">
+          <h3 id="hidden-cards-modal-title">👀 非表示カード一覧</h3>
+          <button type="button" id="restore-all-hidden-btn" class="btn-small" style="background-color: var(--accent-color); color: white; border-color: var(--accent-color);" onclick="restoreAllHiddenCardsUniversal()">すべて再表示</button>
+        </div>
+        <p class="help-text" style="margin-bottom: 8px;">非表示にされたカードは出題されません。再表示を押すと再び出題対象に戻ります。</p>
+        <div id="hidden-cards-list-container" class="card-list-container"></div>
+        <div class="modal-buttons" style="margin-top: 8px;">
+          <button type="button" class="btn-modal-cancel" onclick="closeHiddenCardsModal()">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="goal-setting-modal" class="modal hidden modal-top">
+      <div class="modal-content">
+        <h3>🎯 1日の目標設定</h3>
+        <p class="help-text">学習枚数または学習時間を目標に設定できます（どちらか片方のみ、あるいは両方の設定が可能です）。0に設定するとその目標は無効になります。</p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin: 10px 0;">
+          <div>
+            <label for="goal-input-cards" style="font-size: 0.85em; font-weight: bold;">目標学習枚数 (枚):</label>
+            <input type="number" id="goal-input-cards" class="input-field" min="0" max="10000" step="1" placeholder="例: 50 (0で無効)">
+          </div>
+          <div>
+            <label for="goal-input-minutes" style="font-size: 0.85em; font-weight: bold;">目標学習時間 (分):</label>
+            <input type="number" id="goal-input-minutes" class="input-field" min="0" max="1440" step="1" placeholder="例: 15 (0で無効)">
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-modal-cancel" onclick="closeGoalSettingModal()">キャンセル</button>
+          <button type="button" class="btn-modal-submit" onclick="submitGoalSetting()">目標を保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="achievement-modal" class="modal hidden modal-top">
+      <div class="modal-content" style="text-align: center; border: 2px solid #f59e0b;">
+        <div style="font-size: 3em; margin-bottom: 6px;">🏆</div>
+        <h3 style="color: #f59e0b; margin-bottom: 4px;">新しい称号を獲得！</h3>
+        <div id="achievement-unlocked-name" style="font-size: 1.25em; font-weight: bold; color: var(--header-text); margin-bottom: 8px;"></div>
+        <p id="achievement-unlocked-desc" class="help-text" style="margin-bottom: 12px;"></p>
+        <p style="font-size: 0.85em; font-weight: bold; color: var(--text-main); margin-bottom: 14px;">今すぐステータスを確認しますか？</p>
+        <div class="modal-buttons" style="justify-content: center; gap: 10px;">
+          <button type="button" class="btn-modal-cancel" onclick="closeAchievementModal(false)">あとで</button>
+          <button type="button" class="btn-modal-submit" style="background: #f59e0b;" onclick="closeAchievementModal(true)">今すぐ確認</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="add-card-modal" class="modal hidden modal-top">
+      <div class="modal-content modal-large">
+        <h3>カード追加</h3>
+        <textarea id="new-card-q" class="input-field textarea-q" placeholder="問題文"></textarea>
+        <textarea id="new-card-a" class="input-field textarea-a" placeholder="答え"></textarea>
+        <textarea id="new-card-exp" class="input-field textarea-exp" placeholder="解説（任意）"></textarea>
+        
+        <div class="image-upload-section">
+          <label style="font-size: 0.85em; font-weight: bold;">参考画像（任意）</label>
+          <div id="add-card-img-drop-zone" class="drop-zone" style="padding: 10px;">
+            <p style="font-size: 0.8em; margin: 0;">ここに画像をドロップ<br>または下のボタンから選択</p>
+          </div>
+          <div class="file-input-wrapper" style="margin: 8px 0;"><input type="file" id="add-card-img-input" accept="image/*" class="input-field"></div>
+          <div id="add-card-img-preview" class="img-preview-container hidden">
+            <img id="add-card-img-element" src="" alt="プレビュー" class="edit-img-preview">
+            <button type="button" class="btn-small btn-small-danger" onclick="removeAddCardImage()">画像を削除</button>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-modal-cancel" onclick="closeAddCardModal()">キャンセル</button>
+          <button type="button" class="btn-modal-submit" onclick="submitAddCard()">追加</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="edit-card-modal" class="modal hidden modal-top">
+      <div class="modal-content modal-large">
+        <h3>カード編集</h3>
+        <textarea id="edit-card-q" class="input-field textarea-q" placeholder="問題文"></textarea>
+        <textarea id="edit-card-a" class="input-field textarea-a" placeholder="答え"></textarea>
+        <textarea id="edit-card-exp" class="input-field textarea-exp" placeholder="解説（任意）"></textarea>
+
+        <div class="image-upload-section">
+          <label style="font-size: 0.85em; font-weight: bold;">参考画像（任意）</label>
+          <div id="edit-card-img-drop-zone" class="drop-zone" style="padding: 10px;">
+            <p style="font-size: 0.8em; margin: 0;">ここに画像をドロップ<br>または下のボタンから選択</p>
+          </div>
+          <div class="file-input-wrapper" style="margin: 8px 0;"><input type="file" id="edit-card-img-input" accept="image/*" class="input-field"></div>
+          <div id="edit-card-img-preview" class="img-preview-container hidden">
+            <img id="edit-card-img-element" src="" alt="プレビュー" class="edit-img-preview">
+            <button type="button" class="btn-small btn-small-danger" onclick="removeEditCardImage()">画像を削除</button>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-modal-cancel" onclick="closeEditCardModal()">キャンセル</button>
+          <button type="button" class="btn-modal-submit" onclick="submitEditCard()">更新</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="card-list-modal" class="modal hidden">
+      <div class="modal-content modal-large">
+        <h3 id="card-list-deck-title">カード一覧</h3>
+        <div id="card-list-container" class="card-list-container"></div>
+        <div id="card-pagination" class="card-pagination"></div>
+        <div class="modal-buttons" style="margin-top: 8px;">
+          <button type="button" class="btn-modal-cancel" onclick="closeCardListModal()">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        // Service Workerの登録
+        navigator.serviceWorker.register('./sw.js')
+          .then((registration) => {
+            console.log('[Service Worker] 登録が成功しました:', registration.scope);
+          })
+          .catch((error) => {
+            console.error('[Service Worker] 登録に失敗しました:', error);
+          });
+      });
+    }
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>
