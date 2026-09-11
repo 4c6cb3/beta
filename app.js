@@ -67,7 +67,8 @@ const DEFAULT_USER_CONFIG = {
   enableGamification: false,
   dailyGoalCards: 50,
   dailyGoalMinutes: 15,
-  enableTextSelection: false, 
+  enableTextSelection: false,
+  enableRemoveSpaceBtn: true, // ←半角スペース削除ボタンの表示フラグ
   keyBinds: { ...DEFAULT_KEY_BINDS }
 };
 
@@ -695,7 +696,8 @@ async function initApp() {
       if (userConfig.enableGamification === undefined) userConfig.enableGamification = false;
       if (userConfig.dailyGoalCards === undefined) userConfig.dailyGoalCards = 50;
       if (userConfig.dailyGoalMinutes === undefined) userConfig.dailyGoalMinutes = 15;
-      if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = true; // ←【追加】初期値の補完
+      if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = false;
+      if (userConfig.enableRemoveSpaceBtn === undefined) userConfig.enableRemoveSpaceBtn = false; // ←初期値の補完
       if (!userConfig.keyBinds) userConfig.keyBinds = JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS));
     }
     tempFontSize = userConfig.fontSize;
@@ -909,9 +911,12 @@ function applyConfigUI() {
     }
   }
 
-  // 【追加】テキスト選択トグルの反映
   const cbTextSelection = document.getElementById('toggle-text-selection');
   if (cbTextSelection) cbTextSelection.checked = userConfig.enableTextSelection;
+
+  // 半角スペース削除ボタントグルの反映
+  const cbRemoveSpaceBtn = document.getElementById('toggle-remove-space-btn');
+  if (cbRemoveSpaceBtn) cbRemoveSpaceBtn.checked = userConfig.enableRemoveSpaceBtn;
 
   updateKeyBindButtons();
 }
@@ -1691,9 +1696,15 @@ function toggleGamificationOption(enabled) {
   if (enabled) checkRetroactiveAchievements();
 }
 
-// 【追加】テキスト選択の許可フラグを切り替える関数
+// テキスト選択の許可フラグを切り替える関数
 function toggleTextSelectionOption(enabled) {
   userConfig.enableTextSelection = enabled;
+  saveConfig();
+}
+
+// 半角スペース削除ボタンの表示フラグを切り替える関数
+function toggleRemoveSpaceBtnOption(enabled) {
+  userConfig.enableRemoveSpaceBtn = enabled;
   saveConfig();
 }
 
@@ -1806,7 +1817,7 @@ function resetAllSettingsSafe() {
 async function factoryResetAllDataSafe() {
   if (confirm('【警告 1/3】\n端末内のすべてのデータを完全に消去し、初回インストール時の状態に戻しますか？')) {
     if (confirm('【警告 2/3】\n作成したすべてのデッキ、カード、学習時間、学習記録、設定が完全に消去されます。\n本当に実行してもよろしいですか？')) {
-      if (confirm('【警告 3/3・最終確認】\nこの操作は取り消せません。\n本当にすべてのデータを完全に消去しますか？')) {
+      if (confirm('【警告 3/3・最終確認】\nこの操作は絶対に取り消せません。\n本当にすべてのデータを完全に消去しますか？')) {
         try {
           await idbClear();
           localStorage.clear();
@@ -2132,7 +2143,25 @@ function openEditModalForCard(card) {
     editCardImgElement.src = ''; 
     editCardImgPreview.classList.add('hidden');
   }
+
+  // 「半角space削除」ボタンの表示切替（設定がONのときのみ表示）
+  const btnRemoveSpaces = document.getElementById('btn-remove-spaces');
+  if (btnRemoveSpaces) {
+    if (userConfig.enableRemoveSpaceBtn) {
+      btnRemoveSpaces.classList.remove('hidden');
+    } else {
+      btnRemoveSpaces.classList.add('hidden');
+    }
+  }
+
   if (editCardModal) editCardModal.classList.remove('hidden');
+}
+
+// カード編集欄内の半角スペースを一括削除する処理
+function removeSpacesInEditCard() {
+  if (editCardQ) editCardQ.value = editCardQ.value.replace(/ /g, '');
+  if (editCardA) editCardA.value = editCardA.value.replace(/ /g, '');
+  if (editCardExp) editCardExp.value = editCardExp.value.replace(/ /g, '');
 }
 
 function openEditCardModal(cardId) {
@@ -2530,7 +2559,6 @@ function loadNextCard() {
 
   const qContainer = document.querySelector('.question-container');
   if (qContainer) {
-    // 【変更】ロード直後は常に選択不可に戻す
     qContainer.classList.remove('selectable-text');
   }
 
@@ -2774,7 +2802,6 @@ function advanceQuizState() {
       charIndex = [...currentCard.question].length;
       state = 'ANSWERED';
 
-      // 【追加】解答表示時に、設定がONの場合のみ選択可能クラスを付与
       const qContainer = document.querySelector('.question-container');
       if (qContainer && userConfig.enableTextSelection) {
         qContainer.classList.add('selectable-text');
@@ -2794,7 +2821,6 @@ function advanceQuizState() {
     if (state === 'STOPPED') {
       state = 'ANSWERED';
 
-      // 【追加】解答表示時に、設定がONの場合のみ選択可能クラスを付与
       const qContainer = document.querySelector('.question-container');
       if (qContainer && userConfig.enableTextSelection) {
         qContainer.classList.add('selectable-text');
