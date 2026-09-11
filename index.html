@@ -407,6 +407,17 @@
         </div>
 
         <div class="option-group">
+          <h3>📱 テキスト選択（長押しでのコピーや検索）</h3>
+          <p class="help-text" style="margin-bottom: 10px;">操作時の誤判定を防ぐため、問題文の長押しによるテキスト選択を無効化できます。</p>
+          <div class="option-controls">
+            <label class="radio-label">
+              <input type="checkbox" id="toggle-text-selection" onchange="toggleTextSelectionOption(this.checked)">
+              <span>解答表示時のテキスト選択を許可する</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="option-group">
           <h3>💻 パソコンでのキーボード操作設定</h3>
           <table class="shortcut-table">
             <thead><tr><th>操作</th><th>キー設定</th></tr></thead>

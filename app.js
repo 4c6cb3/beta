@@ -1,4 +1,3 @@
-
 /**
  * =====================================================================
  * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.1.6.2
@@ -68,6 +67,7 @@ const DEFAULT_USER_CONFIG = {
   enableGamification: false,
   dailyGoalCards: 50,
   dailyGoalMinutes: 15,
+  enableTextSelection: false, 
   keyBinds: { ...DEFAULT_KEY_BINDS }
 };
 
@@ -695,6 +695,7 @@ async function initApp() {
       if (userConfig.enableGamification === undefined) userConfig.enableGamification = false;
       if (userConfig.dailyGoalCards === undefined) userConfig.dailyGoalCards = 50;
       if (userConfig.dailyGoalMinutes === undefined) userConfig.dailyGoalMinutes = 15;
+      if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = true; // ←【追加】初期値の補完
       if (!userConfig.keyBinds) userConfig.keyBinds = JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS));
     }
     tempFontSize = userConfig.fontSize;
@@ -908,6 +909,10 @@ function applyConfigUI() {
     }
   }
 
+  // 【追加】テキスト選択トグルの反映
+  const cbTextSelection = document.getElementById('toggle-text-selection');
+  if (cbTextSelection) cbTextSelection.checked = userConfig.enableTextSelection;
+
   updateKeyBindButtons();
 }
 
@@ -915,7 +920,6 @@ function applyConfigUI() {
  * 8. 画面遷移制御
  * ===================================================================== */
 
-// ★今回の不具合の原因だった関数（quizScreenだけ間違えてremoveになっていたのを修正しました）
 function hideAllScreens() {
   clearInterval(timer); 
   clearInterval(previewTimer);
@@ -926,7 +930,6 @@ function hideAllScreens() {
   if (menuScreen) menuScreen.classList.add('hidden');
   if (statsScreen) statsScreen.classList.add('hidden');
   if (optionScreen) optionScreen.classList.add('hidden');
-  // ↓修正箇所: quizScreen も確実に非表示 (hiddenを追加) にする
   if (quizScreen) quizScreen.classList.add('hidden');
   if (resultScreen) resultScreen.classList.add('hidden');
   
@@ -1688,6 +1691,12 @@ function toggleGamificationOption(enabled) {
   if (enabled) checkRetroactiveAchievements();
 }
 
+// 【追加】テキスト選択の許可フラグを切り替える関数
+function toggleTextSelectionOption(enabled) {
+  userConfig.enableTextSelection = enabled;
+  saveConfig();
+}
+
 function startPreviewTyping() {
   clearInterval(previewTimer);
   if (!previewTextContainer) return;
@@ -1797,7 +1806,7 @@ function resetAllSettingsSafe() {
 async function factoryResetAllDataSafe() {
   if (confirm('【警告 1/3】\n端末内のすべてのデータを完全に消去し、初回インストール時の状態に戻しますか？')) {
     if (confirm('【警告 2/3】\n作成したすべてのデッキ、カード、学習時間、学習記録、設定が完全に消去されます。\n本当に実行してもよろしいですか？')) {
-      if (confirm('【警告 3/3・最終確認】\nこの操作は絶対に取り消せません。\n本当にすべてのデータを完全に消去しますか？')) {
+      if (confirm('【警告 3/3・最終確認】\nこの操作は取り消せません。\n本当にすべてのデータを完全に消去しますか？')) {
         try {
           await idbClear();
           localStorage.clear();
@@ -2520,7 +2529,10 @@ function loadNextCard() {
   holdPhase = 'NONE';
 
   const qContainer = document.querySelector('.question-container');
-  if (qContainer) qContainer.classList.remove('selectable-text');
+  if (qContainer) {
+    // 【変更】ロード直後は常に選択不可に戻す
+    qContainer.classList.remove('selectable-text');
+  }
 
   if (studyQueue.length === 0) {
     stopQuizStudyTimer();
@@ -2762,8 +2774,11 @@ function advanceQuizState() {
       charIndex = [...currentCard.question].length;
       state = 'ANSWERED';
 
+      // 【追加】解答表示時に、設定がONの場合のみ選択可能クラスを付与
       const qContainer = document.querySelector('.question-container');
-      if (qContainer) qContainer.classList.add('selectable-text');
+      if (qContainer && userConfig.enableTextSelection) {
+        qContainer.classList.add('selectable-text');
+      }
 
       if (answerSectionEl) {
         answerSectionEl.classList.remove('hidden');
@@ -2771,14 +2786,19 @@ function advanceQuizState() {
       }
       if (answerTextEl) answerTextEl.textContent = currentCard.answer;
       if (buttonsEl) buttonsEl.classList.remove('hidden');
-      if (tapHintEl) tapHintEl.textContent = '評価ボタンを押すか、対応キーで回答してください。\n問題文を長押しでテキスト選択が可能です。';
+      
+      const selectionHint = userConfig.enableTextSelection ? '\n問題文を長押しでテキスト選択が可能です。' : '';
+      if (tapHintEl) tapHintEl.textContent = '評価ボタンを押すか、対応キーで回答してください。' + selectionHint;
     }
   } else {
     if (state === 'STOPPED') {
       state = 'ANSWERED';
 
+      // 【追加】解答表示時に、設定がONの場合のみ選択可能クラスを付与
       const qContainer = document.querySelector('.question-container');
-      if (qContainer) qContainer.classList.add('selectable-text');
+      if (qContainer && userConfig.enableTextSelection) {
+        qContainer.classList.add('selectable-text');
+      }
 
       if (answerSectionEl) {
         answerSectionEl.classList.remove('hidden');
@@ -2786,7 +2806,9 @@ function advanceQuizState() {
       }
       if (answerTextEl) answerTextEl.textContent = currentCard.answer;
       if (buttonsEl) buttonsEl.classList.remove('hidden');
-      if (tapHintEl) tapHintEl.textContent = '評価ボタンを押すか、対応キーで回答してください。\n問題文を長押しでテキスト選択が可能です。';
+      
+      const selectionHint = userConfig.enableTextSelection ? '\n問題文を長押しでテキスト選択が可能です。' : '';
+      if (tapHintEl) tapHintEl.textContent = '評価ボタンを押すか、対応キーで回答してください。' + selectionHint;
     }
   }
 }
