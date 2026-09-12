@@ -5,7 +5,7 @@
  * ===================================================================== */
 
 // キャッシュバージョンを上げて古いキャッシュを一掃
-const CACHE_NAME = 'memoly-cache-v2.0.0-update-2026-09-12';
+const CACHE_NAME = 'memoly-cache-v2.0.0_202609122130';
 
 const ASSETS_TO_CACHE = [
   './',
