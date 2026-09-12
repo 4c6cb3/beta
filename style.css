@@ -1,10 +1,9 @@
 /**
  * =====================================================================
- * memoly - スタイルシート (style.css) - ver.1.6.0
+ * memoly - スタイルシート (style.css) - ver.2.1.0
  * 
- * アプリの見た目（レイアウト、色、文字サイズ、アニメーション）をすべて管理するファイル。
- * 画面サイズに応じたレスポンシブ対応や、ライト/ダークテーマの切り替え、
- * リザルト機能、ゲーミフィケーション（称号・EXP・目標）のUI定義を含みます。
+ * 多重モーダル対応、100dvhビューポート最適化、
+ * ゲーミフィケーション、長押しUI対応版
  * ===================================================================== */
 
 /* =====================================================================
@@ -18,7 +17,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   transition: background-color 0.2s, color 0.2s, border-color 0.2s;
   
-  /* スマホでの長押しジェスチャー制御 */
+  /* スマホでの誤操作・長押しジェスチャー制御 */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -35,7 +34,7 @@ input, textarea {
  * 2. カラーテーマのCSS変数（カスタムプロパティ）定義
  * ===================================================================== */
 
-/* 【ライトテーマ】 白を基調とし、文字は濃いグレーや黒 */
+/* 【ライトテーマ】 */
 body.theme-light {
   --bg-color: #f0f2f5;
   --text-main: #111827;
@@ -55,7 +54,7 @@ body.theme-light {
   --result-easy-bg: rgba(16, 185, 129, 0.08);
 }
 
-/* 【ダークテーマ】 黒を基調とし、まぶしさを抑える */
+/* 【ダークテーマ】 */
 body.theme-dark {
   --bg-color: #121212;
   --text-main: #f3f4f6;
@@ -75,7 +74,7 @@ body.theme-dark {
   --result-easy-bg: rgba(16, 185, 129, 0.18);
 }
 
-/* 【デバイス連動テーマ（初期値）】 基本はライトテーマ */
+/* 【デバイス連動テーマ（初期値）】 */
 body.theme-device {
   --bg-color: #f0f2f5;
   --text-main: #111827;
@@ -95,7 +94,7 @@ body.theme-device {
   --result-easy-bg: rgba(16, 185, 129, 0.08);
 }
 
-/* 端末がダークモード時のデバイス連動上書き */
+/* 端末がダークモード時の自動上書き */
 @media (prefers-color-scheme: dark) {
   body.theme-device {
     --bg-color: #121212;
@@ -127,7 +126,7 @@ body.theme-device {
 }
 
 /* =====================================================================
- * 4. ページ全体の共通レイアウト（土台）
+ * 4. ページ全体の共通レイアウト（100dvh対応）
  * ===================================================================== */
 body {
   background-color: var(--bg-color);
@@ -135,19 +134,21 @@ body {
   font-size: var(--font-base);
   display: flex;
   justify-content: center;
-  padding: 15px;
+  padding: 12px;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
 }
 
-/* スマホサイズ（最大幅480px）に固定するメインコンテナ */
+/* スマホサイズに固定するメインコンテナ */
 .container {
   width: 100%;
   max-width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  height: calc(100vh - 30px);
+  gap: 12px;
+  height: calc(100vh - 24px);
+  height: calc(100dvh - 24px);
 }
 
 .hidden { display: none !important; }
@@ -165,7 +166,7 @@ body {
 
 .fixed-header-area { 
   flex-shrink: 0; 
-  margin-bottom: 10px; 
+  margin-bottom: 8px; 
 }
 
 .scrollable-content {
@@ -179,18 +180,18 @@ body {
  * 6. ヘッダー・ロゴ・ナビゲーションボタン
  * ===================================================================== */
 
-header { text-align: center; margin-bottom: 12px; }
+header { text-align: center; margin-bottom: 8px; }
 
 .app-logo { display: flex; justify-content: center; align-items: center; }
-.app-logo-img { max-width: 180px; height: auto; display: block; }
+.app-logo-img { max-width: 170px; height: auto; display: block; }
 
 .screen-header {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; margin-bottom: 20px;
+  gap: 12px; margin-bottom: 16px;
 }
 
 .screen-header h2 {
-  font-size: 1.2em; color: var(--header-text); 
+  font-size: 1.15em; color: var(--header-text); 
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
   flex: 1; text-align: right;
 }
@@ -205,7 +206,7 @@ header { text-align: center; margin-bottom: 12px; }
 
 .btn-secondary, .btn-option-link {
   background: var(--card-bg); color: var(--text-main);
-  border: 1px solid var(--card-border); padding: 8px 10px;
+  border: 1px solid var(--card-border); padding: 7px 10px;
   border-radius: 8px; font-size: 0.85em; font-weight: bold;
   cursor: pointer; white-space: nowrap;
 }
@@ -226,7 +227,7 @@ header { text-align: center; margin-bottom: 12px; }
 
 .deck-card {
   background: var(--card-bg); border: 1px solid var(--card-border);
-  border-radius: 10px; padding: 15px; box-shadow: 0 2px 8px var(--shadow);
+  border-radius: 10px; padding: 14px; box-shadow: 0 2px 8px var(--shadow);
 }
 
 .deck-header-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -242,15 +243,15 @@ header { text-align: center; margin-bottom: 12px; }
   border-radius: 12px; white-space: nowrap; flex-shrink: 0;
 }
 
-.deck-count { font-size: 0.85em; color: var(--text-sub); margin-bottom: 8px; }
+.deck-count { font-size: 0.85em; color: var(--text-sub); margin-bottom: 6px; }
 
 .deck-mode-badge {
   display: inline-block; font-size: 0.75em; color: var(--text-sub);
   background: var(--bg-color); border: 1px solid var(--card-border);
-  padding: 2px 8px; border-radius: 4px; margin-bottom: 12px;
+  padding: 2px 8px; border-radius: 4px; margin-bottom: 10px;
 }
 
-.deck-manage-btns { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.deck-manage-btns { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 
 .btn-small {
   background: var(--bg-color); border: 1px solid var(--card-border);
@@ -269,10 +270,10 @@ header { text-align: center; margin-bottom: 12px; }
  * 8. 統計・カレンダー・ゲーミフィケーション画面
  * ===================================================================== */
 
-.stats-tab-nav { display: flex; gap: 6px; margin-bottom: 12px; }
+.stats-tab-nav { display: flex; gap: 6px; margin-bottom: 10px; }
 
 .tab-btn {
-  flex: 1; padding: 10px 4px; background: var(--card-bg); color: var(--text-sub);
+  flex: 1; padding: 9px 4px; background: var(--card-bg); color: var(--text-sub);
   border: 1px solid var(--card-border); border-radius: 8px; font-size: 0.88em;
   font-weight: bold; cursor: pointer; text-align: center;
 }
@@ -280,25 +281,25 @@ header { text-align: center; margin-bottom: 12px; }
 
 .streak-card {
   background: linear-gradient(135deg, #3b82f6, #6366f1); color: white;
-  border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 15px;
+  border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 12px;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
-.streak-count { font-size: 1.8em; font-weight: bold; margin-bottom: 6px; }
-.streak-message { font-size: 0.9em; opacity: 0.95; }
+.streak-count { font-size: 1.7em; font-weight: bold; margin-bottom: 4px; }
+.streak-message { font-size: 0.88em; opacity: 0.95; }
 
 .calendar-card {
   background: var(--card-bg); border: 1px solid var(--card-border);
-  border-radius: 12px; padding: 15px;
+  border-radius: 12px; padding: 14px;
 }
-.calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.calendar-header h3 { font-size: 1em; color: var(--header-text); }
+.calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.calendar-header h3 { font-size: 0.95em; color: var(--header-text); }
 
 .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
-.calendar-day-header { font-size: 0.75em; font-weight: bold; color: var(--text-sub); padding-bottom: 6px; }
+.calendar-day-header { font-size: 0.75em; font-weight: bold; color: var(--text-sub); padding-bottom: 4px; }
 
 .calendar-cell {
   background: var(--bg-color); border: 1px solid var(--card-border);
-  border-radius: 6px; min-height: 52px; padding: 4px 2px;
+  border-radius: 6px; min-height: 48px; padding: 3px 2px;
   display: flex; flex-direction: column; justify-content: space-between;
   align-items: center; color: var(--text-main);
   cursor: pointer;
@@ -327,7 +328,7 @@ header { text-align: center; margin-bottom: 12px; }
 .all-time-stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 .stat-summary-item {
   box-shadow: 0 1px 3px var(--shadow);
@@ -339,25 +340,25 @@ header { text-align: center; margin-bottom: 12px; }
 
 .option-group {
   background: var(--card-bg); border: 1px solid var(--card-border);
-  border-radius: 10px; padding: 15px; margin-bottom: 12px;
+  border-radius: 10px; padding: 14px; margin-bottom: 10px;
 }
-.option-group h3 { font-size: 1em; margin-bottom: 12px; color: var(--header-text); }
+.option-group h3 { font-size: 0.95em; margin-bottom: 10px; color: var(--header-text); }
 
 .option-controls { display: flex; flex-direction: column; gap: 10px; }
-.radio-label { display: flex; align-items: center; gap: 8px; font-size: 0.95em; cursor: pointer; color: var(--text-main); }
+.radio-label { display: flex; align-items: center; gap: 8px; font-size: 0.9em; cursor: pointer; color: var(--text-main); }
 
 .preview-font-sample { display: flex; flex-direction: column; gap: 8px; }
 .preview-q-text { font-size: var(--preview-font-size); font-weight: bold; line-height: 1.5; color: var(--header-text); }
 .preview-a-text { font-size: var(--preview-font-size); font-weight: bold; color: #10b981; }
 
-.speed-control-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.speed-control-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .speed-control-container label { color: var(--text-main); }
 .speed-control-container input[type='range'] { width: 100%; }
 .speed-labels { display: flex; justify-content: space-between; font-size: 0.75em; color: var(--text-sub); }
 
-.preview-box { background: var(--bg-color); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; }
-.preview-label { font-size: 0.75em; color: var(--text-sub); margin-bottom: 6px; }
-.preview-text { font-size: 1.1em; font-weight: bold; min-height: 2.8em; line-height: 1.4; color: var(--header-text); }
+.preview-box { background: var(--bg-color); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; }
+.preview-label { font-size: 0.75em; color: var(--text-sub); margin-bottom: 4px; }
+.preview-text { font-size: 1.05em; font-weight: bold; min-height: 2.6em; line-height: 1.4; color: var(--header-text); }
 
 .shortcut-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.85em; }
 .shortcut-table th, .shortcut-table td { padding: 8px; border: 1px solid var(--card-border); text-align: left; color: var(--text-main); }
@@ -373,7 +374,7 @@ header { text-align: center; margin-bottom: 12px; }
 .btn-external-link {
   display: block; text-align: center; background: var(--bg-color);
   color: var(--accent-color); border: 1px solid var(--card-border);
-  padding: 10px; border-radius: 8px; font-size: 0.85em;
+  padding: 9px; border-radius: 8px; font-size: 0.85em;
   font-weight: bold; text-decoration: none;
 }
 
@@ -381,11 +382,16 @@ header { text-align: center; margin-bottom: 12px; }
  * 10. クイズ学習画面
  * ===================================================================== */
 
-.quiz-layout { display: flex; flex-direction: column; min-height: calc(100vh - 32px); justify-content: space-between; }
+.quiz-layout { 
+  display: flex; 
+  flex-direction: column; 
+  min-height: 100%; 
+  justify-content: space-between; 
+}
 
-.quiz-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.quiz-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .quiz-header h2 {
-  font-size: 1.1em; white-space: nowrap; overflow: hidden;
+  font-size: 1.05em; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; flex: 1; text-align: center; color: var(--header-text);
 }
 #progress-info { font-size: 0.85em; color: var(--text-sub); white-space: nowrap; flex-shrink: 0; }
@@ -399,7 +405,7 @@ header { text-align: center; margin-bottom: 12px; }
 
 .card {
   background: var(--card-bg); border: 1px solid var(--card-border);
-  border-radius: 12px; padding: 24px; min-height: 220px; flex: 1;
+  border-radius: 12px; padding: 20px; min-height: 200px; flex: 1;
   box-shadow: 0 4px 12px var(--shadow); cursor: pointer;
   display: flex; flex-direction: column; justify-content: space-between;
   user-select: none;
@@ -410,36 +416,36 @@ header { text-align: center; margin-bottom: 12px; }
 }
 
 .card-level-badge {
-  position: absolute; top: 12px; right: 12px; font-size: 0.72em;
+  position: absolute; top: 10px; right: 10px; font-size: 0.72em;
   font-weight: bold; padding: 3px 8px; border-radius: 10px;
   color: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 5;
 }
 
 .question-container {
-  font-size: 1.15em; font-weight: bold; line-height: 1.6; min-height: 80px;
-  max-height: 200px; overflow-y: auto; padding-right: 4px; margin-top: 12px;
+  font-size: 1.15em; font-weight: bold; line-height: 1.6; min-height: 70px;
+  max-height: 220px; overflow-y: auto; padding-right: 4px; margin-top: 10px;
   color: var(--text-main); -webkit-overflow-scrolling: touch;
 }
 
 .stats {
-  background-color: var(--stats-bg); color: var(--stats-text); padding: 8px;
-  border-radius: 6px; font-size: 0.85em; font-weight: bold; text-align: center; margin: 12px 0;
+  background-color: var(--stats-bg); color: var(--stats-text); padding: 7px;
+  border-radius: 6px; font-size: 0.82em; font-weight: bold; text-align: center; margin: 10px 0;
 }
 
-.answer-section { margin-top: 12px; }
-.answer-section hr { border: none; border-top: 1px solid var(--card-border); margin-bottom: 12px; }
-.answer-section h2 { color: #10b981; font-size: 1.25em; margin-bottom: 8px; }
+.answer-section { margin-top: 10px; }
+.answer-section hr { border: none; border-top: 1px solid var(--card-border); margin-bottom: 10px; }
+.answer-section h2 { color: #10b981; font-size: 1.2em; margin-bottom: 6px; }
 
 .answer-section.holding-only-answer .hide-on-hold { display: none !important; }
 
-.answer-image-container { margin: 12px 0; text-align: center; }
-.answer-img { max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid var(--card-border); object-fit: contain; }
+.answer-image-container { margin: 10px 0; text-align: center; }
+.answer-img { max-width: 100%; max-height: 220px; border-radius: 8px; border: 1px solid var(--card-border); object-fit: contain; }
 
-.quiz-footer { margin-top: 15px; display: flex; flex-direction: column; gap: 8px; }
+.quiz-footer { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .button-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 
 .btn {
-  padding: 12px 4px; border: none; border-radius: 8px; font-size: 0.85em;
+  padding: 11px 4px; border: none; border-radius: 8px; font-size: 0.85em;
   font-weight: bold; color: white; cursor: pointer; text-align: center;
 }
 .btn small { display: block; font-size: 0.7em; font-weight: normal; margin-top: 2px; }
@@ -449,33 +455,40 @@ header { text-align: center; margin-bottom: 12px; }
 .btn-good { background-color: #3b82f6; }
 .btn-easy { background-color: #10b981; }
 
-.tap-hint { text-align: center; color: var(--text-sub); font-size: 0.8em; white-space: pre-line;}
+.tap-hint { text-align: center; color: var(--text-sub); font-size: 0.8em; white-space: pre-line; }
 
 .question-container.selectable-text,
 .question-container.selectable-text * {
   -webkit-user-select: text !important;
   user-select: text !important;
-  -webkit-touch-callout: default !important; /* iOSの長押しメニュー（コピー等）を許可 */
+  -webkit-touch-callout: default !important;
   cursor: text;
 }
 
 /* =====================================================================
- * 11. モーダルダイアログ（ポップアップ画面）共通スタイル
+ * 11. モーダルダイアログ（多重管理・はみ出し防止最適化）
  * ===================================================================== */
 
 .modal {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center;
-  align-items: center; padding: 20px; z-index: 1000;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.5); 
+  display: flex; justify-content: center; align-items: center; 
+  padding: 16px; 
+  z-index: 1000;
+  overflow-y: auto;
 }
-.modal-top { z-index: 1100; }
 
 .modal-content {
   background: var(--card-bg); border: 1px solid var(--card-border);
-  border-radius: 12px; padding: 20px; width: 100%; max-width: 400px;
+  border-radius: 12px; padding: 18px; width: 100%; max-width: 400px;
+  max-height: 90vh; max-height: 90dvh;
+  overflow-y: auto;
   display: flex; flex-direction: column; gap: 12px; color: var(--text-main);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  -webkit-overflow-scrolling: touch;
 }
-.modal-large { max-width: 460px; max-height: 85vh; }
+.modal-large { max-width: 460px; max-height: 85vh; max-height: 85dvh; }
 
 .input-field {
   width: 100%; padding: 10px; border: 1px solid var(--card-border);
@@ -498,14 +511,14 @@ header { text-align: center; margin-bottom: 12px; }
 }
 
 .drop-zone {
-  border: 2px dashed var(--card-border); border-radius: 8px; padding: 20px;
+  border: 2px dashed var(--card-border); border-radius: 8px; padding: 16px;
   text-align: center; color: var(--text-sub); background: var(--bg-color); cursor: pointer;
 }
 .drop-zone.dragover { border-color: var(--accent-color); background-color: var(--banner-bg); }
 
 .image-upload-section { display: flex; flex-direction: column; gap: 6px; }
 .img-preview-container { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 6px; }
-.edit-img-preview { max-width: 100%; max-height: 150px; border-radius: 6px; border: 1px solid var(--card-border); object-fit: contain; }
+.edit-img-preview { max-width: 100%; max-height: 140px; border-radius: 6px; border: 1px solid var(--card-border); object-fit: contain; }
 
 /* =====================================================================
  * 12. カード一覧・学習履歴リストアイテム
@@ -513,7 +526,7 @@ header { text-align: center; margin-bottom: 12px; }
 
 .card-pagination { display: flex; justify-content: space-between; align-items: center; font-size: 0.85em; color: var(--text-sub); }
 
-.card-list-container { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; padding-right: 4px; }
+.card-list-container { display: flex; flex-direction: column; gap: 8px; max-height: 48vh; max-height: 48dvh; overflow-y: auto; padding-right: 4px; }
 
 .card-item {
   background: var(--bg-color); border: 1px solid var(--card-border);

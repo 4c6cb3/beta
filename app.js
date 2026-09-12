@@ -1,6 +1,7 @@
 /**
  * =====================================================================
- * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.1.6.4
+ * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.2.1.0
+ * 【第1部: コアシステム・ストレージ・CSV・モーダル管理・ゲーミフィケーション】
  * ===================================================================== */
 
 /* =====================================================================
@@ -192,7 +193,74 @@ const SAMPLE_PREVIEW_TEXT = '山梨県と静岡県にまたがる、日本で一
 const SAMPLE_PREVIEW_Q_PREFIX = '山梨県と静岡県にまたがる、';
 
 /* =====================================================================
- * 3. DOM要素キャッシュ用変数
+ * 3. モーダル多重重複管理システム (Modal Stack Manager)
+ * ===================================================================== */
+
+const modalStack = [];
+const BASE_MODAL_ZINDEX = 1000;
+
+function openModal(modalEl) {
+  if (!modalEl) return;
+  const index = modalStack.indexOf(modalEl);
+  if (index !== -1) {
+    modalStack.splice(index, 1);
+  }
+  modalStack.push(modalEl);
+  modalEl.classList.remove('hidden');
+
+  // 最前面モーダルの z-index を動的設定し、背景の多重暗転を抑制
+  modalStack.forEach((m, idx) => {
+    m.style.zIndex = BASE_MODAL_ZINDEX + idx * 10;
+    // 最前面以外のモーダルは背景色を透明にして暗転の重なりを防ぐ
+    if (idx === modalStack.length - 1) {
+      m.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    } else {
+      m.style.backgroundColor = 'transparent';
+    }
+  });
+}
+
+function closeModal(modalEl) {
+  if (!modalEl) return;
+  modalEl.classList.add('hidden');
+  modalEl.style.zIndex = '';
+  modalEl.style.backgroundColor = '';
+
+  const index = modalStack.indexOf(modalEl);
+  if (index !== -1) {
+    modalStack.splice(index, 1);
+  }
+
+  // 残った最前面モーダルの背景を通常に戻す
+  if (modalStack.length > 0) {
+    const topModal = modalStack[modalStack.length - 1];
+    topModal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  }
+}
+
+function closeTopModal() {
+  if (modalStack.length > 0) {
+    const topModal = modalStack[modalStack.length - 1];
+    // 個別のクローズ処理にディスパッチ
+    if (topModal.id === 'achievement-modal') closeAchievementModal(false);
+    else if (topModal.id === 'csv-confirm-modal') closeCsvConfirmModal();
+    else if (topModal.id === 'csv-import-modal') closeCsvImportModal();
+    else if (topModal.id === 'csv-export-modal') closeCsvExportModal();
+    else if (topModal.id === 'deck-settings-modal') closeDeckSettingsModal();
+    else if (topModal.id === 'trash-modal') closeTrashModal();
+    else if (topModal.id === 'hidden-cards-modal') closeHiddenCardsModal();
+    else if (topModal.id === 'goal-setting-modal') closeGoalSettingModal();
+    else if (topModal.id === 'add-card-modal') closeAddCardModal();
+    else if (topModal.id === 'edit-card-modal') closeEditCardModal();
+    else if (topModal.id === 'card-list-modal') closeCardListModal();
+    else closeModal(topModal);
+    return true;
+  }
+  return false;
+}
+
+/* =====================================================================
+ * 4. DOM要素キャッシュ用変数
  * ===================================================================== */
 
 let menuScreen, statsScreen, optionScreen, quizScreen, resultScreen,
@@ -313,7 +381,7 @@ function initDOMElements() {
 }
 
 /* =====================================================================
- * 4. IndexedDB 永続化ストレージ処理
+ * 5. IndexedDB 永続化ストレージ処理
  * ===================================================================== */
 
 const DB_NAME = 'memoly_db';
@@ -398,19 +466,21 @@ async function migrateLocalStorage() {
   } catch(e) {}
 }
 
-function saveDecks() { idbSet('memoly_decks', decks).catch(e => console.error(e)); }
-function saveConfig() { idbSet('memoly_config', userConfig).catch(e => console.error(e)); }
-function saveLogs() { idbSet('memoly_logs', studyLogs).catch(e => console.error(e)); }
-function saveDailyHistory() { idbSet('memoly_daily_history', dailyStudyHistory).catch(e => console.error(e)); }
-function saveTrashDecks() { idbSet('memoly_trash_decks', trashDecks).catch(e => console.error(e)); }
-function saveStudyTimes() { idbSet('memoly_study_times', studyTimes).catch(e => console.error(e)); }
+function saveDecks() { return idbSet('memoly_decks', decks); }
+function saveConfig() { return idbSet('memoly_config', userConfig); }
+function saveLogs() { return idbSet('memoly_logs', studyLogs); }
+function saveDailyHistory() { return idbSet('memoly_daily_history', dailyStudyHistory); }
+function saveTrashDecks() { return idbSet('memoly_trash_decks', trashDecks); }
+function saveStudyTimes() { return idbSet('memoly_study_times', studyTimes); }
 function saveGamificationData() {
-  idbSet('memoly_user_exp', userExp).catch(e => console.error(e));
-  idbSet('memoly_user_achievements', userAchievements).catch(e => console.error(e));
+  return Promise.all([
+    idbSet('memoly_user_exp', userExp),
+    idbSet('memoly_user_achievements', userAchievements)
+  ]);
 }
 
 /* =====================================================================
- * 5. 学習時間トラッカー
+ * 6. 学習時間トラッカー
  * ===================================================================== */
 
 function startQuizStudyTimer() {
@@ -472,74 +542,181 @@ function formatDurationMinutes(seconds) {
 }
 
 /* =====================================================================
- * 6. 重複チェック・エクスポート・インポート
+ * 7. 堅牢なRFC 4180準拠 CSVパーサー＆インポート・エクスポート
  * ===================================================================== */
 
-function checkDeckNameDuplicate(title, excludeDeckId = null) {
-  const trimmed = title.trim();
-  const exists = decks.some(d => d.title.trim() === trimmed && d.id !== excludeDeckId);
-  if (exists) {
-    return confirm(`「${trimmed}」という名前は既にほかのデッキで使われていますが、本当にその名前でよろしいですか？`);
-  }
-  return true;
-}
+/**
+ * セル内改行・エスケープ二重引用符に対応した堅牢なCSVパーサー
+ * @param {string} text - 生のCSVテキスト
+ * @returns {Array<Array<string>>} - 行と列の2次元配列
+ */
+function parseRFC4180CSV(text) {
+  if (!text) return [];
+  // UTF-8 BOM の除去
+  const cleanText = text.replace(/^\uFEFF/, '');
+  const rows = [];
+  let currentRow = [];
+  let currentField = '';
+  let inQuotes = false;
 
-async function exportAllDataBackup() {
-  try {
-    const data = {
-      decks: await idbGet('memoly_decks') || decks,
-      trashDecks: await idbGet('memoly_trash_decks') || trashDecks,
-      studyLogs: await idbGet('memoly_logs') || studyLogs,
-      dailyStudyHistory: await idbGet('memoly_daily_history') || dailyStudyHistory,
-      studyTimes: await idbGet('memoly_study_times') || studyTimes,
-      userConfig: await idbGet('memoly_config') || userConfig,
-      userExp: await idbGet('memoly_user_exp') || userExp,
-      userAchievements: await idbGet('memoly_user_achievements') || userAchievements
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `memoly_data_backup_${getFormattedDate(new Date())}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    alert('データのバックアップに成功しました。');
-  } catch (e) {
-    alert('バックアップの作成に失敗しました: ' + e.message);
-  }
-}
+  for (let i = 0; i < cleanText.length; i++) {
+    const char = cleanText[i];
+    const nextChar = cleanText[i + 1];
 
-async function importAllDataBackup(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!data.decks) throw new Error('有効なバックアップデータではありません。');
-      
-      if (confirm('現在の端末内データがすべて上書きされます。よろしいですか？')) {
-        await idbSet('memoly_decks', data.decks);
-        await idbSet('memoly_trash_decks', data.trashDecks || []);
-        await idbSet('memoly_logs', data.studyLogs || {});
-        await idbSet('memoly_daily_history', data.dailyStudyHistory || {});
-        await idbSet('memoly_study_times', data.studyTimes || {});
-        await idbSet('memoly_config', data.userConfig || userConfig);
-        await idbSet('memoly_user_exp', data.userExp || 0);
-        await idbSet('memoly_user_achievements', data.userAchievements || {});
-        
-        alert('データを完全に復元しました。アプリをリロードします。');
-        window.location.reload();
+    if (inQuotes) {
+      if (char === '"') {
+        if (nextChar === '"') {
+          // エスケープされた二重引用符 ("")
+          currentField += '"';
+          i++;
+        } else {
+          // クォート終了
+          inQuotes = false;
+        }
+      } else {
+        // クォート内の改行やカンマはそのまま文字として追加
+        currentField += char;
       }
-    } catch (err) {
-      alert('復元に失敗しました: ' + err.message);
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        currentRow.push(currentField);
+        currentField = '';
+      } else if (char === '\r') {
+        if (nextChar === '\n') i++; // CRLF
+        currentRow.push(currentField);
+        rows.push(currentRow);
+        currentRow = [];
+        currentField = '';
+      } else if (char === '\n') { // LF
+        currentRow.push(currentField);
+        rows.push(currentRow);
+        currentRow = [];
+        currentField = '';
+      } else {
+        currentField += char;
+      }
     }
-    event.target.value = '';
-  };
-  reader.readAsText(file, 'UTF-8');
+  }
+
+  // 最終フィールドおよび行の処理
+  if (currentField.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentField);
+    rows.push(currentRow);
+  }
+
+  // 末尾の空行を除去
+  return rows.filter(row => row.some(cell => cell.trim().length > 0));
+}
+
+function processCsvText(text, fileName = 'インポートデッキ') {
+  const rawRows = parseRFC4180CSV(text);
+  if (rawRows.length === 0) {
+    alert('CSVデータが空か、有効な行が見つかりませんでした。');
+    return;
+  }
+
+  // ヘッダー判定（大文字小文字無視）
+  const header = rawRows[0].map(c => c.trim().toLowerCase());
+  let qIdx = 0, aIdx = 1, expIdx = 2;
+  let startIndex = 0;
+
+  const isQuestionCol = (c) => c === 'question' || c === 'question_plain' || c === '問題' || c === '問題文';
+  const isAnswerCol = (c) => c === 'answer' || c === 'answer_plain' || c === '答え' || c === '解答';
+  const isRemarkCol = (c) => c === 'remark' || c === 'remark_plain' || c === 'explanation' || c === '解説';
+
+  const hasHeader = header.some(c => isQuestionCol(c) || isAnswerCol(c));
+
+  if (hasHeader) {
+    qIdx = header.findIndex(isQuestionCol);
+    aIdx = header.findIndex(isAnswerCol);
+    expIdx = header.findIndex(isRemarkCol);
+    if (qIdx === -1) qIdx = 0;
+    if (aIdx === -1) aIdx = 1;
+    startIndex = 1;
+  }
+
+  const newCards = [];
+  const baseTime = Date.now();
+
+  for (let i = startIndex; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    const q = (row[qIdx] !== undefined ? row[qIdx] : '').trim();
+    const a = (row[aIdx] !== undefined ? row[aIdx] : '').trim();
+    const exp = (expIdx !== -1 && row[expIdx] !== undefined ? row[expIdx] : '').trim();
+
+    if (q && a) {
+      newCards.push({
+        id: `card-${baseTime}-${i}`,
+        question: q,
+        answer: a,
+        explanation: exp,
+        image: '',
+        dueDate: 0,
+        interval: 0,
+        easeFactor: 2.5,
+        reps: 0,
+        lastStudied: 0,
+        consecutiveAgain: 0,
+        isHidden: false
+      });
+    }
+  }
+
+  if (newCards.length > 0) {
+    pendingCsvCards = newCards;
+    closeCsvImportModal();
+    if (csvDeckNameInput) csvDeckNameInput.value = fileName.replace(/\.[^/.]+$/, '');
+    if (csvConfirmCardCount) csvConfirmCardCount.textContent = `読み込み成功: ${newCards.length} 枚のカード`;
+    openModal(csvConfirmModal);
+    if (csvDeckNameInput) csvDeckNameInput.focus();
+  } else {
+    alert('有効なカードデータが見つかりませんでした。\n問題と答えが含まれているか確認してください。');
+    if (csvInput) csvInput.value = '';
+  }
+}
+
+function openCsvImportModal() {
+  if (csvInput) csvInput.value = '';
+  openModal(csvImportModal);
+}
+
+function closeCsvImportModal() {
+  closeModal(csvImportModal);
+}
+
+function closeCsvConfirmModal() {
+  closeModal(csvConfirmModal);
+  pendingCsvCards = [];
+  if (csvInput) csvInput.value = '';
+}
+
+function submitCsvImport() {
+  if (!pendingCsvCards || pendingCsvCards.length === 0) {
+    alert('インポートするカードデータがありません。');
+    closeCsvConfirmModal();
+    return;
+  }
+  const titleInput = csvDeckNameInput ? csvDeckNameInput.value.trim() : '';
+  if (!titleInput) { alert('デッキ名を入力してください。'); return; }
+
+  if (checkDeckNameDuplicate(titleInput)) {
+    const newDeck = {
+      id: 'deck-' + Date.now(),
+      title: titleInput,
+      orderMode: 'SHUFFLE',
+      excludeStar: false,
+      lastStudied: Date.now(),
+      cards: pendingCsvCards
+    };
+    decks.push(newDeck);
+    saveDecks(); 
+    renderMenu();
+    closeCsvConfirmModal();
+    alert(`デッキ「${newDeck.title}」を追加しました！（${newDeck.cards.length}枚）`);
+    if (userConfig.enableGamification) triggerAchievement('first_deck');
+  }
 }
 
 function openCsvExportModal() {
@@ -551,11 +728,11 @@ function openCsvExportModal() {
     opt.textContent = deck.title;
     exportDeckSelect.appendChild(opt);
   });
-  csvExportModal.classList.remove('hidden');
+  openModal(csvExportModal);
 }
 
 function closeCsvExportModal() {
-  if (csvExportModal) csvExportModal.classList.add('hidden');
+  closeModal(csvExportModal);
 }
 
 function submitCsvExport() {
@@ -582,26 +759,27 @@ function submitCsvExport() {
   }
 
   const csvRows = [];
+  // ヘッダー出力
+  csvRows.push('"question","answer","explanation"');
+
   targetDecks.forEach(deck => {
     (deck.cards || []).forEach(card => {
       const escapeCsv = (str) => {
-        if (str === null || str === undefined) return '';
-        let escaped = str.toString().replace(/"/g, '""');
-        if (escaped.search(/("|,|\n)/g) >= 0) escaped = `"${escaped}"`;
-        return escaped;
+        if (str === null || str === undefined) return '""';
+        return `"${str.toString().replace(/"/g, '""')}"`;
       };
       csvRows.push(`${escapeCsv(card.question)},${escapeCsv(card.answer)},${escapeCsv(card.explanation || '')}`);
     });
   });
 
-  if (csvRows.length === 0) {
+  if (csvRows.length <= 1) {
     alert('出力するカードがありません。');
     closeCsvExportModal();
     return;
   }
 
   const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-  const blob = new Blob([bom, csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob([bom, csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -654,7 +832,7 @@ function removeEditCardImage() {
 }
 
 function setupImageDropZone(dropZoneId, inputId, onImageLoaded) {
-  const dropZone = document.getElementById('drop-zone');
+  const dropZone = document.getElementById(dropZoneId);
   const input = document.getElementById(inputId);
   if (!dropZone || !input) return;
 
@@ -663,644 +841,33 @@ function setupImageDropZone(dropZoneId, inputId, onImageLoaded) {
   ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.add('dragover'), false));
   ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover'), false));
 
-  dropZone.addEventListener('drop', (e) => {
+  dropZone.addEventListener('drop', async (e) => {
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      if (!file.name.toLowerCase().endsWith('.csv')) { alert('CSVファイルのみ追加可能です。'); return; }
-      const reader = new FileReader();
-      reader.onload = event => processCsvText(event.target.result, file.name);
-      reader.readAsText(file, 'UTF-8');
-    }
-  });
-  dropZone.addEventListener('click', () => { if (csvInput) csvInput.click(); });
-}
-
-/* =====================================================================
- * 7. アプリケーション初期化
- * ===================================================================== */
-
-async function initApp() {
-  try {
-    initDOMElements();
-    await migrateLocalStorage();
-
-    const savedConfig = await idbGet('memoly_config');
-    if (savedConfig) {
-      userConfig = { ...DEFAULT_USER_CONFIG, ...savedConfig };
-      if (typeof userConfig.fontSize === 'string') userConfig.fontSize = 15;
-      if (userConfig.holdSpeedQ === undefined) userConfig.holdSpeedQ = userConfig.holdSpeed || 0.2;
-      if (userConfig.holdSpeedA === undefined) userConfig.holdSpeedA = userConfig.holdSpeed || 1.0;
-      if (userConfig.enableReviewResult === undefined) userConfig.enableReviewResult = false;
-      if (userConfig.reviewInterval === undefined) userConfig.reviewInterval = 50;
-      if (userConfig.enableGamification === undefined) userConfig.enableGamification = false;
-      if (userConfig.dailyGoalCards === undefined) userConfig.dailyGoalCards = 50;
-      if (userConfig.dailyGoalMinutes === undefined) userConfig.dailyGoalMinutes = 15;
-      if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = false;
-      if (userConfig.enableRemoveSpaceBtn === undefined) userConfig.enableRemoveSpaceBtn = false;
-      if (!userConfig.keyBinds) userConfig.keyBinds = JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS));
-    }
-    tempFontSize = userConfig.fontSize;
-
-    const savedDecks = await idbGet('memoly_decks');
-    if (Array.isArray(savedDecks) && savedDecks.length > 0) {
-      decks = savedDecks;
-      decks.forEach(d => {
-        if (!d.orderMode) d.orderMode = 'SHUFFLE';
-        if (d.excludeStar === undefined) d.excludeStar = false;
-        if (!d.lastStudied) d.lastStudied = 0;
-        if (!Array.isArray(d.cards)) d.cards = [];
-        d.cards.forEach(c => {
-          if (c.isHidden === undefined) c.isHidden = false;
-          if (c.consecutiveAgain === undefined) c.consecutiveAgain = 0;
-          if (c.lastStudied === undefined) c.lastStudied = 0;
-        });
-      });
-    } else { 
-      decks = JSON.parse(JSON.stringify(defaultDecks)); 
-      await idbSet('memoly_decks', decks); 
-    }
-
-    const savedTrash = await idbGet('memoly_trash_decks');
-    if (Array.isArray(savedTrash)) trashDecks = savedTrash;
-
-    const savedLogs = await idbGet('memoly_logs');
-    if (savedLogs) studyLogs = savedLogs;
-
-    const savedDaily = await idbGet('memoly_daily_history');
-    if (savedDaily) dailyStudyHistory = savedDaily;
-
-    const savedTimes = await idbGet('memoly_study_times');
-    if (savedTimes) studyTimes = savedTimes;
-
-    const savedExp = await idbGet('memoly_user_exp');
-    if (typeof savedExp === 'number') userExp = savedExp;
-
-    const savedAch = await idbGet('memoly_user_achievements');
-    if (savedAch && typeof savedAch === 'object') userAchievements = savedAch;
-
-    updateUserLevelFromExp();
-    checkRetroactiveAchievements();
-
-    setupEventListeners();
-    setupOptionPreviewEventListeners();
-    setupDragAndDrop();
-    setupActivityListeners();
-
-    setupImageDropZone('add-card-img-drop-zone', 'add-card-img-input', (dataUrl) => {
-      currentAddingImageData = dataUrl;
-      if(addCardImgElement) addCardImgElement.src = dataUrl;
-      if(addCardImgPreview) addCardImgPreview.classList.remove('hidden');
-    });
-
-    setupImageDropZone('edit-card-img-drop-zone', 'edit-card-img-input', (dataUrl) => {
-      currentEditingImageData = dataUrl;
-      if(editCardImgElement) editCardImgElement.src = dataUrl;
-      if(editCardImgPreview) editCardImgPreview.classList.remove('hidden');
-    });
-
-    selectedCalendarDateStr = getFormattedDate(new Date());
-
-    applyConfigUI();
-    showMenu();
-    checkPendingAchievementPopup();
-  } catch (err) {
-    console.error('[memoly 初期化エラー]', err);
-    decks = JSON.parse(JSON.stringify(defaultDecks));
-    showMenu();
-  }
-}
-
-function removeCardFromHistory(cardId) {
-  let modified = false;
-  Object.keys(dailyStudyHistory).forEach((dateKey) => {
-    if (dailyStudyHistory[dateKey] && dailyStudyHistory[dateKey][cardId]) {
-      delete dailyStudyHistory[dateKey][cardId];
-      modified = true;
-    }
-  });
-  if (modified) saveDailyHistory();
-}
-
-function recordStudyLog(card, rating) {
-  const todayStr = getFormattedDate(new Date());
-  if (!studyLogs[todayStr]) studyLogs[todayStr] = 0;
-  studyLogs[todayStr] += 1;
-  saveLogs();
-
-  if (!dailyStudyHistory[todayStr]) dailyStudyHistory[todayStr] = {};
-  if (!dailyStudyHistory[todayStr][card.id]) {
-    dailyStudyHistory[todayStr][card.id] = {
-      card: { question: card.question, answer: card.answer },
-      deckTitle: currentDeck ? currentDeck.title : '',
-      againCount: 0, totalCount: 0, lastStudiedTime: Date.now()
-    };
-  }
-  dailyStudyHistory[todayStr][card.id].lastStudiedTime = Date.now();
-  if (currentDeck) dailyStudyHistory[todayStr][card.id].deckTitle = currentDeck.title;
-  dailyStudyHistory[todayStr][card.id].totalCount += 1;
-  if (rating === 'again') dailyStudyHistory[todayStr][card.id].againCount += 1;
-  saveDailyHistory();
-
-  if (userConfig.enableGamification) {
-    addExpForRating(rating);
-    checkCardStudyAchievements();
-  }
-}
-
-function getFormattedDate(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function applyConfigUI() {
-  document.body.className = `theme-${userConfig.theme}`;
-  document.documentElement.style.setProperty('--font-base', `${userConfig.fontSize}px`);
-  document.documentElement.style.setProperty('--preview-font-size', `${tempFontSize}px`);
-
-  const themeRadio = document.querySelector(`input[name="theme-option"][value="${userConfig.theme}"]`);
-  if (themeRadio) themeRadio.checked = true;
-
-  if (fontSizeRange) fontSizeRange.value = tempFontSize;
-  if (fontSizeValueDisplay) fontSizeValueDisplay.textContent = tempFontSize;
-
-  const modeRadio = document.querySelector(`input[name="mode-option"][value="${userConfig.mode}"]`);
-  if (modeRadio) modeRadio.checked = true;
-
-  const modeDescEl = document.getElementById('mode-description-text');
-  if (modeDescEl) {
-    if (userConfig.mode === 'NORMAL') modeDescEl.textContent = '問題文全表示の単語帳のようなモード。';
-    else if (userConfig.mode === 'FAST') modeDescEl.textContent = '問題文が1文字ずつ表示されるモード。早押しクイズの形式を再現。';
-  }
-
-  const sortRadio = document.querySelector(`input[name="sort-option"][value="${userConfig.deckSortOrder}"]`);
-  if (sortRadio) sortRadio.checked = true;
-
-  if (charSpeedRange) charSpeedRange.value = userConfig.charSpeed;
-  if (speedValueDisplay) speedValueDisplay.textContent = userConfig.charSpeed;
-
-  const speedDisabledNotice = document.getElementById('speed-disabled-notice');
-  if (speedOptionGroup) {
-    const isFastMode = (userConfig.mode === 'FAST');
-    if (charSpeedRange) charSpeedRange.disabled = !isFastMode;
-    speedOptionGroup.style.opacity = isFastMode ? '1' : '0.4';
-    speedOptionGroup.style.pointerEvents = isFastMode ? 'auto' : 'none';
-    if (speedDisabledNotice) speedDisabledNotice.style.display = isFastMode ? 'none' : 'block';
-    if (isFastMode) startPreviewTyping(); else clearInterval(previewTimer);
-  }
-
-  const cbLongPress = document.getElementById('toggle-long-press');
-  if (cbLongPress) cbLongPress.checked = userConfig.enableLongPress;
-
-  const isLongPressGlobalEnabled = userConfig.enableLongPress;
-  const isNormalMode = (userConfig.mode === 'NORMAL');
-
-  const holdQGroup = document.getElementById('hold-q-group');
-  const rangeHoldSpeedQ = document.getElementById('hold-speed-q-range');
-  const dispHoldSpeedQ = document.getElementById('hold-speed-q-display');
-  if (rangeHoldSpeedQ) rangeHoldSpeedQ.value = userConfig.holdSpeedQ || 0.2;
-  if (dispHoldSpeedQ) dispHoldSpeedQ.textContent = (userConfig.holdSpeedQ || 0.2).toFixed(1);
-
-  if (holdQGroup && rangeHoldSpeedQ) {
-    const shouldDisableQ = !isLongPressGlobalEnabled || isNormalMode;
-    rangeHoldSpeedQ.disabled = shouldDisableQ;
-    holdQGroup.style.opacity = shouldDisableQ ? '0.4' : '1';
-    holdQGroup.style.pointerEvents = shouldDisableQ ? 'none' : 'auto';
-  }
-
-  const holdAGroup = document.getElementById('hold-a-group');
-  const rangeHoldSpeedA = document.getElementById('hold-speed-a-range');
-  const dispHoldSpeedA = document.getElementById('hold-speed-a-display');
-  if (rangeHoldSpeedA) rangeHoldSpeedA.value = userConfig.holdSpeedA || 1.0;
-  if (dispHoldSpeedA) dispHoldSpeedA.textContent = (userConfig.holdSpeedA || 1.0).toFixed(1);
-
-  if (holdAGroup && rangeHoldSpeedA) {
-    const shouldDisableA = !isLongPressGlobalEnabled;
-    rangeHoldSpeedA.disabled = shouldDisableA;
-    holdAGroup.style.opacity = shouldDisableA ? '0.4' : '1';
-    holdAGroup.style.pointerEvents = shouldDisableA ? 'none' : 'auto';
-  }
-
-  const cbCardLevel = document.getElementById('toggle-card-level');
-  if (cbCardLevel) cbCardLevel.checked = userConfig.enableCardLevel;
-
-  const cbReviewResult = document.getElementById('toggle-review-result');
-  if (cbReviewResult) cbReviewResult.checked = !!userConfig.enableReviewResult;
-
-  const reviewIntContainer = document.getElementById('review-interval-container');
-  const inputReviewInt = document.getElementById('review-interval-input');
-  if (inputReviewInt) inputReviewInt.value = userConfig.reviewInterval || 50;
-  if (reviewIntContainer) {
-    reviewIntContainer.style.opacity = userConfig.enableReviewResult ? '1' : '0.4';
-    reviewIntContainer.style.pointerEvents = userConfig.enableReviewResult ? 'auto' : 'none';
-  }
-
-  const cbGamification = document.getElementById('toggle-gamification');
-  if (cbGamification) cbGamification.checked = !!userConfig.enableGamification;
-
-  const tabAchievementsBtn = document.getElementById('tab-btn-achievements');
-  if (tabAchievementsBtn) {
-    if (userConfig.enableGamification) {
-      tabAchievementsBtn.classList.remove('hidden');
-    } else {
-      tabAchievementsBtn.classList.add('hidden');
-      const tabAchievements = document.getElementById('stats-tab-achievements');
-      if (tabAchievements && !tabAchievements.classList.contains('hidden')) {
-        switchStatsTab('daily');
+    if (files.length > 0 && files[0].type.startsWith('image/')) {
+      try {
+        const resized = await resizeImage(files[0]);
+        onImageLoaded(resized);
+      } catch (err) {
+        alert('画像の読み込みに失敗しました。');
       }
     }
-  }
-
-  const cbTextSelection = document.getElementById('toggle-text-selection');
-  if (cbTextSelection) cbTextSelection.checked = userConfig.enableTextSelection;
-
-  const cbRemoveSpaceBtn = document.getElementById('toggle-remove-space-btn');
-  if (cbRemoveSpaceBtn) cbRemoveSpaceBtn.checked = userConfig.enableRemoveSpaceBtn;
-
-  updateKeyBindButtons();
-}
-
-/* =====================================================================
- * 8. 画面遷移制御
- * ===================================================================== */
-
-function hideAllScreens() {
-  clearInterval(timer); 
-  clearInterval(previewTimer);
-  clearTimeout(holdTimer); 
-  clearInterval(holdInterval);
-  stopQuizStudyTimer();
-  
-  if (menuScreen) menuScreen.classList.add('hidden');
-  if (statsScreen) statsScreen.classList.add('hidden');
-  if (optionScreen) optionScreen.classList.add('hidden');
-  if (quizScreen) quizScreen.classList.add('hidden');
-  if (resultScreen) resultScreen.classList.add('hidden');
-  
-  if (optLearningScreen) optLearningScreen.classList.add('hidden');
-  if (optCustomScreen) optCustomScreen.classList.add('hidden');
-  if (optDisplayScreen) optDisplayScreen.classList.add('hidden');
-  if (optDeckScreen) optDeckScreen.classList.add('hidden');
-  if (optDataScreen) optDataScreen.classList.add('hidden');
-}
-
-function showMenu() {
-  hideAllScreens();
-  if (menuScreen) menuScreen.classList.remove('hidden');
-  renderMenu();
-  checkPendingAchievementPopup();
-}
-
-function showStats() {
-  hideAllScreens();
-  if (statsScreen) statsScreen.classList.remove('hidden');
-  switchStatsTab('daily'); 
-  renderStatsScreen();
-}
-
-function switchStatsTab(tabName) {
-  const btnDaily = document.getElementById('tab-btn-daily');
-  const btnCards = document.getElementById('tab-btn-cards');
-  const btnAch = document.getElementById('tab-btn-achievements');
-
-  const tabDaily = document.getElementById('stats-tab-daily');
-  const tabCards = document.getElementById('stats-tab-cards');
-  const tabAch = document.getElementById('stats-tab-achievements');
-
-  [btnDaily, btnCards, btnAch].forEach(b => { if (b) b.classList.remove('active'); });
-  [tabDaily, tabCards, tabAch].forEach(t => { if (t) t.classList.add('hidden'); });
-
-  if (tabName === 'daily') {
-    if (btnDaily) btnDaily.classList.add('active');
-    if (tabDaily) tabDaily.classList.remove('hidden');
-  } else if (tabName === 'cards') {
-    if (btnCards) btnCards.classList.add('active');
-    if (tabCards) tabCards.classList.remove('hidden');
-  } else if (tabName === 'achievements') {
-    if (btnAch) btnAch.classList.add('active');
-    if (tabAch) tabAch.classList.remove('hidden');
-    renderAchievementsTab();
-  }
-}
-
-function showOption() {
-  hideAllScreens(); 
-  tempFontSize = userConfig.fontSize;
-  if (optionScreen) optionScreen.classList.remove('hidden');
-}
-
-function showOptScreen(screenId) {
-  hideAllScreens();
-  const targetScreen = document.getElementById(screenId);
-  if (targetScreen) targetScreen.classList.remove('hidden');
-  
-  applyConfigUI();
-  if (screenId === 'opt-learning-screen') {
-    if (userConfig.mode === 'FAST') startPreviewTyping();
-    resetOptHoldPreview();
-  }
-}
-
-/* =====================================================================
- * 9. 統計・カレンダー描画
- * ===================================================================== */
-
-function calculateStreak() {
-  let streak = 0; 
-  let checkDate = new Date();
-  const todayStr = getFormattedDate(checkDate);
-  let hasToday = !!(studyLogs[todayStr] && studyLogs[todayStr] > 0);
-  if (!hasToday) checkDate.setDate(checkDate.getDate() - 1);
-  while (true) {
-    const dateStr = getFormattedDate(checkDate);
-    if (studyLogs[dateStr] && studyLogs[dateStr] > 0) {
-      streak++; 
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else break;
-  }
-  return streak;
-}
-
-function getEncouragementMessage(streak) {
-  if (streak === 0) return 'まずは今日、最初の1枚を挑戦してみよう！';
-  if (streak === 1) return 'ナイススタート！この調子で明日も続けよう！';
-  if (streak < 3) return '素晴らしい！習慣化への第一歩を踏み出せています！';
-  if (streak < 7) return 'すごい集中力！この勢いで1週間を目指そう！';
-  if (streak < 14) return '1週間突破！着実に知識が定着してきています！';
-  if (streak < 30) return '継続の達人！素晴らしい努力が実を結んでいます！';
-  return '伝説的継続力！あなたの努力は本当に素晴らしいです！！';
-}
-
-function renderStatsScreen() {
-  const streak = calculateStreak();
-  if (streakDaysEl) streakDaysEl.textContent = streak;
-  if (streakMessageEl) streakMessageEl.textContent = getEncouragementMessage(streak);
-  updateStatsDeckSelect();
-  renderCalendar(); 
-  renderSelectedDayDetail();
-  renderAllTimeStats();
-  renderTodayStudiedList();
-}
-
-function updateStatsDeckSelect() {
-  const deckSelect = document.getElementById('stats-deck-select');
-  if (!deckSelect) return;
-  const currentValue = deckSelect.value;
-  deckSelect.innerHTML = '<option value="ALL_DECKS">すべてのデッキ</option>';
-  
-  const deckNames = new Set();
-  decks.forEach(d => { if (d.title) deckNames.add(d.title); });
-  
-  Object.keys(dailyStudyHistory).forEach(dateKey => {
-    const dayData = dailyStudyHistory[dateKey];
-    if (dayData) {
-      Object.values(dayData).forEach(item => { if (item.deckTitle) deckNames.add(item.deckTitle); });
-    }
-  });
-  
-  Array.from(deckNames).sort().forEach(name => {
-    const opt = document.createElement('option');
-    opt.value = name; opt.textContent = name;
-    deckSelect.appendChild(opt);
-  });
-  deckSelect.value = Array.from(deckNames).includes(currentValue) ? currentValue : 'ALL_DECKS';
-}
-
-function changeCalendarMonth(delta) {
-  currentCalendarDate.setDate(1); 
-  currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
-  renderCalendar();
-}
-
-function renderCalendar() {
-  if (!calendarTitleEl || !calendarGridEl) return;
-  const year = currentCalendarDate.getFullYear();
-  const month = currentCalendarDate.getMonth();
-  calendarTitleEl.textContent = `${year}年 ${month + 1}月`;
-  calendarGridEl.innerHTML = '';
-
-  ['日', '月', '火', '水', '木', '金', '土'].forEach(d => {
-    const dh = document.createElement('div'); 
-    dh.className = 'calendar-day-header'; 
-    dh.textContent = d;
-    calendarGridEl.appendChild(dh);
   });
 
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayStr = getFormattedDate(new Date());
-
-  if (!selectedCalendarDateStr) selectedCalendarDateStr = todayStr;
-
-  for (let i = 0; i < firstDay; i++) {
-    const emptyCell = document.createElement('div'); 
-    emptyCell.className = 'calendar-cell empty';
-    calendarGridEl.appendChild(emptyCell);
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const cellDate = new Date(year, month, day);
-    const dateStr = getFormattedDate(cellDate);
-    const count = studyLogs[dateStr] || 0;
-
-    const cell = document.createElement('div');
-    let cellClass = 'calendar-cell';
-    if (count > 0) cellClass += ' has-data';
-    if (dateStr === todayStr) cellClass += ' today';
-    if (dateStr === selectedCalendarDateStr) cellClass += ' selected';
-    
-    cell.className = cellClass;
-    cell.innerHTML = `<span class="day-num">${day}</span>${count > 0 ? `<span class="day-count">${count}枚</span>` : ''}`;
-    cell.onclick = () => selectCalendarDay(dateStr);
-    calendarGridEl.appendChild(cell);
-  }
-}
-
-function selectCalendarDay(dateStr) {
-  selectedCalendarDateStr = dateStr;
-  renderCalendar();
-  renderSelectedDayDetail();
-}
-
-function renderSelectedDayDetail() {
-  if (!selectedDayTitleEl || !selectedDayCardsEl || !selectedDayTimeEl) return;
-  const todayStr = getFormattedDate(new Date());
-  const isToday = (selectedCalendarDateStr === todayStr);
-  const parts = selectedCalendarDateStr.split('-');
-  
-  selectedDayTitleEl.textContent = isToday ? '本日の学習記録' : `${parseInt(parts[0], 10)}年${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日の学習記録`;
-  selectedDayCardsEl.textContent = studyLogs[selectedCalendarDateStr] || 0;
-  selectedDayTimeEl.textContent = formatDurationMinutes(studyTimes[selectedCalendarDateStr] || 0);
-}
-
-function renderAllTimeStats() {
-  if (!statTotalTimeEl) return;
-  let totalSeconds = 0;
-  Object.values(studyTimes).forEach(sec => { totalSeconds += (sec || 0); });
-  statTotalTimeEl.textContent = formatDurationMinutes(totalSeconds);
-
-  let totalStudied = 0;
-  Object.values(studyLogs).forEach(cnt => { totalStudied += (cnt || 0); });
-  if (statTotalStudiedCardsEl) statTotalStudiedCardsEl.textContent = `${totalStudied}枚`;
-
-  let totalNewCards = 0, totalStarCards = 0, playedDecksCount = 0, masteredDecksCount = 0;
-
-  decks.forEach(deck => {
-    const activeCards = (deck.cards || []).filter(c => !c.isHidden);
-    let deckHasPlayed = (deck.lastStudied && deck.lastStudied > 0);
-    let deckAllStar = (activeCards.length > 0);
-
-    activeCards.forEach(card => {
-      if ((card.reps && card.reps > 0) || (card.dueDate && card.dueDate > 0) || (card.lastStudied && card.lastStudied > 0)) {
-        totalNewCards++;
-        deckHasPlayed = true;
+  input.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (files.length > 0 && files[0].type.startsWith('image/')) {
+      try {
+        const resized = await resizeImage(files[0]);
+        onImageLoaded(resized);
+      } catch (err) {
+        alert('画像の読み込みに失敗しました。');
       }
-      if (card.interval >= 30) totalStarCards++;
-      else deckAllStar = false;
-    });
-
-    if (deckHasPlayed) playedDecksCount++;
-    if (deckAllStar) masteredDecksCount++;
-  });
-
-  if (statTotalNewCardsEl) statTotalNewCardsEl.textContent = `${totalNewCards}枚`;
-  if (statTotalStarCardsEl) statTotalStarCardsEl.textContent = `${totalStarCards}枚`;
-  if (statPlayedDecksCountEl) statPlayedDecksCountEl.textContent = `${playedDecksCount}`;
-  if (statMasteredDecksCountEl) statMasteredDecksCountEl.textContent = `${masteredDecksCount}`;
-}
-
-function changeTodayCardsSortOrder(order) { 
-  todayCardsSortOrder = order; 
-  renderTodayStudiedList(); 
-}
-
-// 【暗記レベル判定関数】一度でも解いたカードはLv.0に戻らない
-function getCardLevelInfo(card) {
-  if (!card) return { level: 0, score: 0, color: '#9ca3af' };
-  let level = 1, score = 0;
-  const val = card.interval || 0, reps = card.reps || 0, dueDate = card.dueDate || 0;
-  const lastStudied = card.lastStudied || 0;
-
-  // 未学習（一度も解かれていない）のみ「レベル0」
-  if (val === 0 && reps === 0 && dueDate === 0 && lastStudied === 0) {
-    level = 0; 
-    score = 0; 
-  }
-  else if (val >= 30) { level = '★'; score = 1.0; }
-  else if (val >= 21) { level = 10; score = 0.8; }
-  else if (val >= 14) { level = 9; score = 0.6; }
-  else if (val >= 10) { level = 8; score = 0.6; }
-  else if (val >= 7)  { level = 7; score = 0.4; }
-  else if (val >= 5)  { level = 6; score = 0.4; }
-  else if (val >= 3)  { level = 5; score = 0.4; }
-  else if (val >= 2)  { level = 4; score = 0.2; }
-  else if (val >= 1)  { level = 3; score = 0.2; }
-  else if (val >= 0.5){ level = 2; score = 0; }
-  else { 
-    // 一度でも学習されたカードは最低でもレベル1
-    level = 1; 
-    score = 0; 
-  }
-
-  let bg = '#9ca3af';
-  if (level === '★') bg = '#8b5cf6';
-  else if (level !== 0) bg = `hsl(217, 90%, ${Math.max(25, 75 - Number(level) * 5)}%)`;
-
-  return { level, score, color: bg };
-}
-
-function renderTodayStudiedList() {
-  const container = document.getElementById('today-studied-list');
-  if (!container) return;
-  container.innerHTML = '';
-
-  const rangeSelect = document.getElementById('stats-range-select');
-  const deckSelect = document.getElementById('stats-deck-select');
-  const range = rangeSelect ? rangeSelect.value : 'TODAY';
-  const targetDeckTitle = deckSelect ? deckSelect.value : 'ALL_DECKS';
-
-  let studiedCards = [];
-  const allCardsMap = {};
-  decks.forEach(deck => { (deck.cards || []).forEach(c => { allCardsMap[c.id] = c; }); });
-
-  if (range === 'TODAY') {
-    const todayStr = getFormattedDate(new Date());
-    const todayData = dailyStudyHistory[todayStr];
-    if (todayData) {
-      studiedCards = Object.keys(todayData).map(cardId => ({ id: cardId, ...todayData[cardId] }));
     }
-  } else {
-    const merged = {};
-    Object.keys(dailyStudyHistory).forEach(dateKey => {
-      const dayData = dailyStudyHistory[dateKey];
-      if (dayData) {
-        Object.keys(dayData).forEach(cardId => {
-          const item = dayData[cardId];
-          if (!merged[cardId]) {
-            merged[cardId] = {
-              id: cardId,
-              card: { question: item.card.question, answer: item.card.answer },
-              deckTitle: item.deckTitle,
-              againCount: 0, totalCount: 0, lastStudiedTime: 0
-            };
-          }
-          merged[cardId].againCount += (item.againCount || 0);
-          merged[cardId].totalCount += (item.totalCount || 0);
-          if (item.lastStudiedTime > merged[cardId].lastStudiedTime) {
-            merged[cardId].lastStudiedTime = item.lastStudiedTime;
-            if (item.deckTitle) merged[cardId].deckTitle = item.deckTitle;
-          }
-        });
-      }
-    });
-    studiedCards = Object.values(merged);
-  }
-
-  if (targetDeckTitle !== 'ALL_DECKS') {
-    studiedCards = studiedCards.filter(item => item.deckTitle === targetDeckTitle);
-  }
-
-  if (studiedCards.length === 0) {
-    container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--text-sub); font-size:0.85em;">該当する学習カードはありません。</div>`;
-    return;
-  }
-
-  if (todayCardsSortOrder === 'AGAIN') {
-    studiedCards.sort((a, b) => (b.againCount || 0) - (a.againCount || 0));
-  } else {
-    studiedCards.sort((a, b) => (b.lastStudiedTime || 0) - (a.lastStudiedTime || 0));
-  }
-
-  studiedCards.forEach(item => {
-    const realCard = allCardsMap[item.id];
-    let levelBadgeHtml = '';
-    if (userConfig.enableCardLevel) {
-      const lvInfo = realCard ? getCardLevelInfo(realCard) : { level: 1, color: 'hsl(217, 90%, 70%)' };
-      levelBadgeHtml = `<div style="background-color: ${lvInfo.color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.9em; font-weight: bold;">Lv.${lvInfo.level}</div>`;
-    }
-
-    const itemEl = document.createElement('div'); 
-    itemEl.className = 'card-item';
-    itemEl.innerHTML = `
-      <div class="card-item-info">
-        <div class="card-item-deck-title">from ${item.deckTitle ? item.deckTitle : '不明なデッキ'}</div>
-        <div class="card-item-q">Q. ${item.card.question}</div>
-        <div class="card-item-a">A. ${item.card.answer}</div>
-      </div>
-      <div style="font-size:0.8em; font-weight:bold; color: var(--text-sub); flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; min-width: 70px;">
-        ${levelBadgeHtml}
-        <div style="margin-top: 4px;">総学習: ${item.totalCount || 1}回</div>
-        <div style="color: ${item.againCount > 0 ? '#ef4444' : 'var(--text-sub)'};">「もう一度」: ${item.againCount}回</div>
-      </div>
-    `;
-    container.appendChild(itemEl);
   });
 }
 
 /* =====================================================================
- * 10. ゲーミフィケーション＆称号システム
+ * 8. ゲーミフィケーション＆称号システム（完全Undo対応）
  * ===================================================================== */
 
 function getExpRequiredForLevel(lv) {
@@ -1373,13 +940,13 @@ function showNextAchievementPopup() {
   if (modal && nameEl && descEl) {
     nameEl.textContent = `${ach.icon} ${ach.name}`;
     descEl.textContent = ach.desc;
-    modal.classList.remove('hidden');
+    openModal(modal);
   }
 }
 
 function closeAchievementModal(goToStats = false) {
   const modal = document.getElementById('achievement-modal');
-  if (modal) modal.classList.add('hidden');
+  if (modal) closeModal(modal);
   if (pendingAchievementAlerts.length > 0) pendingAchievementAlerts.shift();
 
   if (goToStats) {
@@ -1501,6 +1068,10 @@ function checkDailyGoalAchievements() {
   if (achieved) triggerAchievement('daily_goal_done');
 }
 
+/* =====================================================================
+ * 9. ゲーミフィケーションUI描画 & デイリー目標
+ * ===================================================================== */
+
 function renderAchievementsTab() {
   const lvInfo = updateUserLevelFromExp();
   const lvEl = document.getElementById('user-level');
@@ -1606,11 +1177,11 @@ function openGoalSettingModal() {
   const inputMins = document.getElementById('goal-input-minutes');
   if (inputCards) inputCards.value = userConfig.dailyGoalCards || 0;
   if (inputMins) inputMins.value = userConfig.dailyGoalMinutes || 0;
-  if (goalSettingModal) goalSettingModal.classList.remove('hidden');
+  openModal(goalSettingModal);
 }
 
 function closeGoalSettingModal() {
-  if (goalSettingModal) goalSettingModal.classList.add('hidden');
+  closeModal(goalSettingModal);
 }
 
 function submitGoalSetting() {
@@ -1627,7 +1198,7 @@ function submitGoalSetting() {
 }
 
 /* =====================================================================
- * 11. 設定ハンドラ
+ * 10. 設定ハンドラ
  * ===================================================================== */
 
 function changeTheme(theme) { userConfig.theme = theme; saveConfig(); applyConfigUI(); }
@@ -1876,7 +1447,381 @@ function resetKeyBinds() {
 }
 
 /* =====================================================================
- * 12. メインメニュー画面 & デッキ管理
+ * 11. 画面遷移制御
+ * ===================================================================== */
+
+function hideAllScreens() {
+  clearInterval(timer); 
+  clearInterval(previewTimer);
+  clearTimeout(holdTimer); 
+  clearInterval(holdInterval);
+  stopQuizStudyTimer();
+  
+  if (menuScreen) menuScreen.classList.add('hidden');
+  if (statsScreen) statsScreen.classList.add('hidden');
+  if (optionScreen) optionScreen.classList.add('hidden');
+  if (quizScreen) quizScreen.classList.add('hidden');
+  if (resultScreen) resultScreen.classList.add('hidden');
+  
+  if (optLearningScreen) optLearningScreen.classList.add('hidden');
+  if (optCustomScreen) optCustomScreen.classList.add('hidden');
+  if (optDisplayScreen) optDisplayScreen.classList.add('hidden');
+  if (optDeckScreen) optDeckScreen.classList.add('hidden');
+  if (optDataScreen) optDataScreen.classList.add('hidden');
+}
+
+function showMenu() {
+  hideAllScreens();
+  if (menuScreen) menuScreen.classList.remove('hidden');
+  renderMenu();
+  checkPendingAchievementPopup();
+}
+
+function showStats() {
+  hideAllScreens();
+  if (statsScreen) statsScreen.classList.remove('hidden');
+  switchStatsTab('daily'); 
+  renderStatsScreen();
+}
+
+function switchStatsTab(tabName) {
+  const btnDaily = document.getElementById('tab-btn-daily');
+  const btnCards = document.getElementById('tab-btn-cards');
+  const btnAch = document.getElementById('tab-btn-achievements');
+
+  const tabDaily = document.getElementById('stats-tab-daily');
+  const tabCards = document.getElementById('stats-tab-cards');
+  const tabAch = document.getElementById('stats-tab-achievements');
+
+  [btnDaily, btnCards, btnAch].forEach(b => { if (b) b.classList.remove('active'); });
+  [tabDaily, tabCards, tabAch].forEach(t => { if (t) t.classList.add('hidden'); });
+
+  if (tabName === 'daily') {
+    if (btnDaily) btnDaily.classList.add('active');
+    if (tabDaily) tabDaily.classList.remove('hidden');
+  } else if (tabName === 'cards') {
+    if (btnCards) btnCards.classList.add('active');
+    if (tabCards) tabCards.classList.remove('hidden');
+  } else if (tabName === 'achievements') {
+    if (btnAch) btnAch.classList.add('active');
+    if (tabAch) tabAch.classList.remove('hidden');
+    renderAchievementsTab();
+  }
+}
+
+function showOption() {
+  hideAllScreens(); 
+  tempFontSize = userConfig.fontSize;
+  if (optionScreen) optionScreen.classList.remove('hidden');
+}
+
+function showOptScreen(screenId) {
+  hideAllScreens();
+  const targetScreen = document.getElementById(screenId);
+  if (targetScreen) targetScreen.classList.remove('hidden');
+  
+  applyConfigUI();
+  if (screenId === 'opt-learning-screen') {
+    if (userConfig.mode === 'FAST') startPreviewTyping();
+    resetOptHoldPreview();
+  }
+}
+
+/* =====================================================================
+ * 12. 統計・カレンダー描画
+ * ===================================================================== */
+
+function calculateStreak() {
+  let streak = 0; 
+  let checkDate = new Date();
+  const todayStr = getFormattedDate(checkDate);
+  let hasToday = !!(studyLogs[todayStr] && studyLogs[todayStr] > 0);
+  if (!hasToday) checkDate.setDate(checkDate.getDate() - 1);
+  while (true) {
+    const dateStr = getFormattedDate(checkDate);
+    if (studyLogs[dateStr] && studyLogs[dateStr] > 0) {
+      streak++; 
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else break;
+  }
+  return streak;
+}
+
+function getEncouragementMessage(streak) {
+  if (streak === 0) return 'まずは今日、最初の1枚を挑戦してみよう！';
+  if (streak === 1) return 'ナイススタート！この調子で明日も続けよう！';
+  if (streak < 3) return '素晴らしい！習慣化への第一歩を踏み出せています！';
+  if (streak < 7) return 'すごい集中力！この勢いで1週間を目指そう！';
+  if (streak < 14) return '1週間突破！着実に知識が定着してきています！';
+  if (streak < 30) return '継続の達人！素晴らしい努力が実を結んでいます！';
+  return '伝説的継続力！あなたの努力は本当に素晴らしいです！！';
+}
+
+function renderStatsScreen() {
+  const streak = calculateStreak();
+  if (streakDaysEl) streakDaysEl.textContent = streak;
+  if (streakMessageEl) streakMessageEl.textContent = getEncouragementMessage(streak);
+  updateStatsDeckSelect();
+  renderCalendar(); 
+  renderSelectedDayDetail();
+  renderAllTimeStats();
+  renderTodayStudiedList();
+}
+
+function updateStatsDeckSelect() {
+  const deckSelect = document.getElementById('stats-deck-select');
+  if (!deckSelect) return;
+  const currentValue = deckSelect.value;
+  deckSelect.innerHTML = '<option value="ALL_DECKS">すべてのデッキ</option>';
+  
+  const deckNames = new Set();
+  decks.forEach(d => { if (d.title) deckNames.add(d.title); });
+  
+  Object.keys(dailyStudyHistory).forEach(dateKey => {
+    const dayData = dailyStudyHistory[dateKey];
+    if (dayData) {
+      Object.values(dayData).forEach(item => { if (item.deckTitle) deckNames.add(item.deckTitle); });
+    }
+  });
+  
+  Array.from(deckNames).sort().forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    deckSelect.appendChild(opt);
+  });
+  deckSelect.value = Array.from(deckNames).includes(currentValue) ? currentValue : 'ALL_DECKS';
+}
+
+function changeCalendarMonth(delta) {
+  currentCalendarDate.setDate(1); 
+  currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+  renderCalendar();
+}
+
+function renderCalendar() {
+  if (!calendarTitleEl || !calendarGridEl) return;
+  const year = currentCalendarDate.getFullYear();
+  const month = currentCalendarDate.getMonth();
+  calendarTitleEl.textContent = `${year}年 ${month + 1}月`;
+  calendarGridEl.innerHTML = '';
+
+  ['日', '月', '火', '水', '木', '金', '土'].forEach(d => {
+    const dh = document.createElement('div'); 
+    dh.className = 'calendar-day-header'; 
+    dh.textContent = d;
+    calendarGridEl.appendChild(dh);
+  });
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = getFormattedDate(new Date());
+
+  if (!selectedCalendarDateStr) selectedCalendarDateStr = todayStr;
+
+  for (let i = 0; i < firstDay; i++) {
+    const emptyCell = document.createElement('div'); 
+    emptyCell.className = 'calendar-cell empty';
+    calendarGridEl.appendChild(emptyCell);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const cellDate = new Date(year, month, day);
+    const dateStr = getFormattedDate(cellDate);
+    const count = studyLogs[dateStr] || 0;
+
+    const cell = document.createElement('div');
+    let cellClass = 'calendar-cell';
+    if (count > 0) cellClass += ' has-data';
+    if (dateStr === todayStr) cellClass += ' today';
+    if (dateStr === selectedCalendarDateStr) cellClass += ' selected';
+    
+    cell.className = cellClass;
+    cell.innerHTML = `<span class="day-num">${day}</span>${count > 0 ? `<span class="day-count">${count}枚</span>` : ''}`;
+    cell.onclick = () => selectCalendarDay(dateStr);
+    calendarGridEl.appendChild(cell);
+  }
+}
+
+function selectCalendarDay(dateStr) {
+  selectedCalendarDateStr = dateStr;
+  renderCalendar();
+  renderSelectedDayDetail();
+}
+
+function renderSelectedDayDetail() {
+  if (!selectedDayTitleEl || !selectedDayCardsEl || !selectedDayTimeEl) return;
+  const todayStr = getFormattedDate(new Date());
+  const isToday = (selectedCalendarDateStr === todayStr);
+  const parts = selectedCalendarDateStr.split('-');
+  
+  selectedDayTitleEl.textContent = isToday ? '本日の学習記録' : `${parseInt(parts[0], 10)}年${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日の学習記録`;
+  selectedDayCardsEl.textContent = studyLogs[selectedCalendarDateStr] || 0;
+  selectedDayTimeEl.textContent = formatDurationMinutes(studyTimes[selectedCalendarDateStr] || 0);
+}
+
+function renderAllTimeStats() {
+  if (!statTotalTimeEl) return;
+  let totalSeconds = 0;
+  Object.values(studyTimes).forEach(sec => { totalSeconds += (sec || 0); });
+  statTotalTimeEl.textContent = formatDurationMinutes(totalSeconds);
+
+  let totalStudied = 0;
+  Object.values(studyLogs).forEach(cnt => { totalStudied += (cnt || 0); });
+  if (statTotalStudiedCardsEl) statTotalStudiedCardsEl.textContent = `${totalStudied}枚`;
+
+  let totalNewCards = 0, totalStarCards = 0, playedDecksCount = 0, masteredDecksCount = 0;
+
+  decks.forEach(deck => {
+    const activeCards = (deck.cards || []).filter(c => !c.isHidden);
+    let deckHasPlayed = (deck.lastStudied && deck.lastStudied > 0);
+    let deckAllStar = (activeCards.length > 0);
+
+    activeCards.forEach(card => {
+      if ((card.reps && card.reps > 0) || (card.dueDate && card.dueDate > 0) || (card.lastStudied && card.lastStudied > 0)) {
+        totalNewCards++;
+        deckHasPlayed = true;
+      }
+      if (card.interval >= 30) totalStarCards++;
+      else deckAllStar = false;
+    });
+
+    if (deckHasPlayed) playedDecksCount++;
+    if (deckAllStar) masteredDecksCount++;
+  });
+
+  if (statTotalNewCardsEl) statTotalNewCardsEl.textContent = `${totalNewCards}枚`;
+  if (statTotalStarCardsEl) statTotalStarCardsEl.textContent = `${totalStarCards}枚`;
+  if (statPlayedDecksCountEl) statPlayedDecksCountEl.textContent = `${playedDecksCount}`;
+  if (statMasteredDecksCountEl) statMasteredDecksCountEl.textContent = `${masteredDecksCount}`;
+}
+
+function changeTodayCardsSortOrder(order) { 
+  todayCardsSortOrder = order; 
+  renderTodayStudiedList(); 
+}
+
+function getCardLevelInfo(card) {
+  if (!card) return { level: 0, score: 0, color: '#9ca3af' };
+  let level = 1, score = 0;
+  const val = card.interval || 0, reps = card.reps || 0, dueDate = card.dueDate || 0;
+  const lastStudied = card.lastStudied || 0;
+
+  if (val === 0 && reps === 0 && dueDate === 0 && lastStudied === 0) {
+    level = 0; 
+    score = 0; 
+  }
+  else if (val >= 30) { level = '★'; score = 1.0; }
+  else if (val >= 21) { level = 10; score = 0.8; }
+  else if (val >= 14) { level = 9; score = 0.6; }
+  else if (val >= 10) { level = 8; score = 0.6; }
+  else if (val >= 7)  { level = 7; score = 0.4; }
+  else if (val >= 5)  { level = 6; score = 0.4; }
+  else if (val >= 3)  { level = 5; score = 0.4; }
+  else if (val >= 2)  { level = 4; score = 0.2; }
+  else if (val >= 1)  { level = 3; score = 0.2; }
+  else if (val >= 0.5){ level = 2; score = 0; }
+  else { 
+    level = 1; 
+    score = 0; 
+  }
+
+  let bg = '#9ca3af';
+  if (level === '★') bg = '#8b5cf6';
+  else if (level !== 0) bg = `hsl(217, 90%, ${Math.max(25, 75 - Number(level) * 5)}%)`;
+
+  return { level, score, color: bg };
+}
+
+function renderTodayStudiedList() {
+  const container = document.getElementById('today-studied-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const rangeSelect = document.getElementById('stats-range-select');
+  const deckSelect = document.getElementById('stats-deck-select');
+  const range = rangeSelect ? rangeSelect.value : 'TODAY';
+  const targetDeckTitle = deckSelect ? deckSelect.value : 'ALL_DECKS';
+
+  let studiedCards = [];
+  const allCardsMap = {};
+  decks.forEach(deck => { (deck.cards || []).forEach(c => { allCardsMap[c.id] = c; }); });
+
+  if (range === 'TODAY') {
+    const todayStr = getFormattedDate(new Date());
+    const todayData = dailyStudyHistory[todayStr];
+    if (todayData) {
+      studiedCards = Object.keys(todayData).map(cardId => ({ id: cardId, ...todayData[cardId] }));
+    }
+  } else {
+    const merged = {};
+    Object.keys(dailyStudyHistory).forEach(dateKey => {
+      const dayData = dailyStudyHistory[dateKey];
+      if (dayData) {
+        Object.keys(dayData).forEach(cardId => {
+          const item = dayData[cardId];
+          if (!merged[cardId]) {
+            merged[cardId] = {
+              id: cardId,
+              card: { question: item.card.question, answer: item.card.answer },
+              deckTitle: item.deckTitle,
+              againCount: 0, totalCount: 0, lastStudiedTime: 0
+            };
+          }
+          merged[cardId].againCount += (item.againCount || 0);
+          merged[cardId].totalCount += (item.totalCount || 0);
+          if (item.lastStudiedTime > merged[cardId].lastStudiedTime) {
+            merged[cardId].lastStudiedTime = item.lastStudiedTime;
+            if (item.deckTitle) merged[cardId].deckTitle = item.deckTitle;
+          }
+        });
+      }
+    });
+    studiedCards = Object.values(merged);
+  }
+
+  if (targetDeckTitle !== 'ALL_DECKS') {
+    studiedCards = studiedCards.filter(item => item.deckTitle === targetDeckTitle);
+  }
+
+  if (studiedCards.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--text-sub); font-size:0.85em;">該当する学習カードはありません。</div>`;
+    return;
+  }
+
+  if (todayCardsSortOrder === 'AGAIN') {
+    studiedCards.sort((a, b) => (b.againCount || 0) - (a.againCount || 0));
+  } else {
+    studiedCards.sort((a, b) => (b.lastStudiedTime || 0) - (a.lastStudiedTime || 0));
+  }
+
+  studiedCards.forEach(item => {
+    const realCard = allCardsMap[item.id];
+    let levelBadgeHtml = '';
+    if (userConfig.enableCardLevel) {
+      const lvInfo = realCard ? getCardLevelInfo(realCard) : { level: 1, color: 'hsl(217, 90%, 70%)' };
+      levelBadgeHtml = `<div style="background-color: ${lvInfo.color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.9em; font-weight: bold;">Lv.${lvInfo.level}</div>`;
+    }
+
+    const itemEl = document.createElement('div'); 
+    itemEl.className = 'card-item';
+    itemEl.innerHTML = `
+      <div class="card-item-info">
+        <div class="card-item-deck-title">from ${item.deckTitle ? item.deckTitle : '不明なデッキ'}</div>
+        <div class="card-item-q">Q. ${item.card.question}</div>
+        <div class="card-item-a">A. ${item.card.answer}</div>
+      </div>
+      <div style="font-size:0.8em; font-weight:bold; color: var(--text-sub); flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; min-width: 70px;">
+        ${levelBadgeHtml}
+        <div style="margin-top: 4px;">総学習: ${item.totalCount || 1}回</div>
+        <div style="color: ${item.againCount > 0 ? '#ef4444' : 'var(--text-sub)'};">「もう一度」: ${item.againCount}回</div>
+      </div>
+    `;
+    container.appendChild(itemEl);
+  });
+}
+
+/* =====================================================================
+ * 13. メインメニュー画面 & デッキ管理
  * ===================================================================== */
 
 function renderMenu() {
@@ -1948,11 +1893,11 @@ function openDeckSettingsModal(deckId) {
   const cbExclude = document.getElementById('deck-exclude-star-option');
   if (cbExclude) cbExclude.checked = !!deck.excludeStar;
 
-  if (deckSettingsModal) deckSettingsModal.classList.remove('hidden');
+  openModal(deckSettingsModal);
 }
 
 function closeDeckSettingsModal() {
-  if (deckSettingsModal) deckSettingsModal.classList.add('hidden');
+  closeModal(deckSettingsModal);
   targetDeckForSettings = null;
 }
 
@@ -2016,7 +1961,7 @@ function resetDeckProgress(deckId) {
       card.easeFactor = 2.5; 
       card.reps = 0;
       card.lastStudied = 0;
-      card.consecutiveAgain = 0; // 連続もう一度カウントもリセット
+      card.consecutiveAgain = 0;
     });
     saveDecks(); 
     renderMenu(); 
@@ -2035,8 +1980,13 @@ function deleteDeck(deckId) {
   }
 }
 
-function openTrashModal() { renderTrashList(); if (trashModal) trashModal.classList.remove('hidden'); }
-function closeTrashModal() { if (trashModal) trashModal.classList.add('hidden'); }
+function openTrashModal() { 
+  renderTrashList(); 
+  openModal(trashModal); 
+}
+function closeTrashModal() { 
+  closeModal(trashModal); 
+}
 
 function renderTrashList() {
   if (!trashListContainer) return;
@@ -2107,7 +2057,7 @@ function clearAllTrash() {
 }
 
 /* =====================================================================
- * 13. カード個別編集・追加・リストモーダル
+ * 14. カード個別編集・追加・リストモーダル
  * ===================================================================== */
 
 function openAddCardModal(deckId) {
@@ -2116,11 +2066,11 @@ function openAddCardModal(deckId) {
   if (newCardA) newCardA.value = '';
   if (newCardExp) newCardExp.value = '';
   removeAddCardImage();
-  if (addCardModal) addCardModal.classList.remove('hidden');
+  openModal(addCardModal);
 }
 
 function closeAddCardModal() {
-  if (addCardModal) addCardModal.classList.add('hidden');
+  closeModal(addCardModal);
   targetDeckForAddCard = null;
 }
 
@@ -2167,7 +2117,7 @@ function openEditModalForCard(card) {
     }
   }
 
-  if (editCardModal) editCardModal.classList.remove('hidden');
+  openModal(editCardModal);
 }
 
 function removeSpacesInEditCard() {
@@ -2191,7 +2141,7 @@ function openEditCurrentQuizCard(event) {
 }
 
 function closeEditCardModal() {
-  if (editCardModal) editCardModal.classList.add('hidden');
+  closeModal(editCardModal);
   targetCardForEdit = null; currentEditingImageData = '';
 }
 
@@ -2233,11 +2183,11 @@ function openCardListModal(deckId) {
   if (!deck) return;
   if (cardListDeckTitle) cardListDeckTitle.textContent = `カード一覧: ${deck.title}`;
   renderCardList();
-  if (cardListModal) cardListModal.classList.remove('hidden');
+  openModal(cardListModal);
 }
 
 function closeCardListModal() {
-  if (cardListModal) cardListModal.classList.add('hidden');
+  closeModal(cardListModal);
   targetDeckForCardList = null;
 }
 
@@ -2316,159 +2266,19 @@ function deleteCard(cardId) {
 }
 
 /* =====================================================================
- * 14. CSVパースおよびインポート
+ * 15. クイズ学習ロジック & リザルト & 完全Undo/Redo
  * ===================================================================== */
 
-function openCsvImportModal() {
-  if (csvInput) csvInput.value = '';
-  if (csvImportModal) csvImportModal.classList.remove('hidden');
-}
-
-function closeCsvImportModal() {
-  if (csvImportModal) csvImportModal.classList.add('hidden');
-}
-
-function closeCsvConfirmModal() {
-  if (csvConfirmModal) csvConfirmModal.classList.add('hidden');
-  pendingCsvCards = [];
-  if (csvInput) csvInput.value = '';
-}
-
-function submitCsvImport() {
-  if (!pendingCsvCards || pendingCsvCards.length === 0) {
-    alert('インポートするカードデータがありません。');
-    closeCsvConfirmModal();
-    return;
-  }
-  const titleInput = csvDeckNameInput ? csvDeckNameInput.value.trim() : '';
-  if (!titleInput) { alert('デッキ名を入力してください。'); return; }
-
-  if (checkDeckNameDuplicate(titleInput)) {
-    const newDeck = {
-      id: 'deck-' + Date.now(),
-      title: titleInput,
-      orderMode: 'SHUFFLE',
-      excludeStar: false,
-      lastStudied: Date.now(),
-      cards: pendingCsvCards
-    };
-    decks.push(newDeck);
-    saveDecks(); renderMenu();
-    closeCsvConfirmModal();
-    alert(`デッキ「${newDeck.title}」を追加しました！（${newDeck.cards.length}枚）`);
-    if (userConfig.enableGamification) triggerAchievement('first_deck');
-  }
-}
-
-function parseCSVLine(line) {
-  const result = []; 
-  let current = ''; 
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') inQuotes = !inQuotes;
-    else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
-    else current += char;
-  }
-  result.push(current); 
-  return result;
-}
-
-function processCsvText(text, fileName = 'インポートデッキ') {
-  const lines = text.split('\n'); 
-  if (lines.length === 0) { alert('データが空です。'); return; }
-
-  const firstLineParts = parseCSVLine(lines[0]).map(p => p.trim().toLowerCase());
-  let qIdx = 0, aIdx = 1, expIdx = 2;
-  let startIndex = 0;
-
-  if (firstLineParts.includes('question') || firstLineParts.includes('question_plain')) {
-    qIdx = firstLineParts.indexOf('question_plain') !== -1 ? firstLineParts.indexOf('question_plain') : firstLineParts.indexOf('question');
-    aIdx = firstLineParts.indexOf('answer_plain') !== -1 ? firstLineParts.indexOf('answer_plain') : firstLineParts.indexOf('answer');
-    expIdx = firstLineParts.indexOf('remark_plain') !== -1 ? firstLineParts.indexOf('remark_plain') : firstLineParts.indexOf('remark');
-    startIndex = 1;
-  }
-
-  const newCards = [];
-  for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-    const parts = parseCSVLine(line).map(p => p.trim());
-    
-    let q = (parts[qIdx] || '').replace(/^"|"$/g, '').replace(/""/g, '"');
-    let a = (parts[aIdx] || '').replace(/^"|"$/g, '').replace(/""/g, '"');
-    let exp = expIdx !== -1 ? (parts[expIdx] || '').replace(/^"|"$/g, '').replace(/""/g, '"') : '';
-
-    if (q && a) {
-      newCards.push({
-        id: `card-${Date.now()}-${i}`, 
-        question: q, answer: a, explanation: exp, image: '', 
-        dueDate: 0, interval: 0, easeFactor: 2.5, reps: 0, lastStudied: 0, consecutiveAgain: 0, isHidden: false
-      });
-    }
-  }
-
-  if (newCards.length > 0) {
-    pendingCsvCards = newCards;
-    closeCsvImportModal();
-    if (csvDeckNameInput) csvDeckNameInput.value = fileName.replace(/\.[^/.]+$/, '');
-    if (csvConfirmCardCount) csvConfirmCardCount.textContent = `読み込み成功: ${newCards.length} 枚のカード`;
-    if (csvConfirmModal) csvConfirmModal.classList.remove('hidden');
-    if (csvDeckNameInput) csvDeckNameInput.focus();
-  } else { 
-    alert('有効なカードデータが見つかりませんでした。'); 
-    if (csvInput) csvInput.value = '';
-  }
-}
-
-function setupDragAndDrop() {
-  const dropZone = document.getElementById('drop-zone');
-  if (!dropZone) return;
-
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); }, false));
-  ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.add('dragover'), false));
-  ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover'), false));
-
-  dropZone.addEventListener('drop', (e) => {
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      if (!file.name.toLowerCase().endsWith('.csv')) { alert('CSVファイルのみ追加可能です。'); return; }
-      const reader = new FileReader();
-      reader.onload = event => processCsvText(event.target.result, file.name);
-      reader.readAsText(file, 'UTF-8');
-    }
-  });
-  dropZone.addEventListener('click', () => { if (csvInput) csvInput.click(); });
-}
-
-/* =====================================================================
- * 15. クイズ学習ロジック & リザルト機能
- * ===================================================================== */
-
-// 各レベル（1〜11：★）に対応する代表的な復習間隔日数テーブル
 const LEVEL_INTERVAL_TABLE = {
-  1: 0.2,   // Lv.1: 約5時間後
-  2: 0.5,   // Lv.2: 12時間後
-  3: 1,     // Lv.3: 1日後
-  4: 2,     // Lv.4: 2日後
-  5: 3,     // Lv.5: 3日後
-  6: 5,     // Lv.6: 5日後
-  7: 7,     // Lv.7: 7日後
-  8: 10,    // Lv.8: 10日後
-  9: 14,    // Lv.9: 14日後
-  10: 21,   // Lv.10: 21日後
-  11: 30    // Lv.★: 30日後
+  1: 0.2, 2: 0.5, 3: 1, 4: 2, 5: 3, 6: 5, 7: 7, 8: 10, 9: 14, 10: 21, 11: 30
 };
 
-// カードの現在のレベルを数値（0〜11）で取得する関数
 function getCardNumericLevel(card) {
   const info = getCardLevelInfo(card);
   if (info.level === '★') return 11;
   return Number(info.level) || 0;
 }
 
-// 【大幅改修】暗記レベルの段階的ダウンと最低点Lv.1保証アルゴリズム
 function calculateNextReview(card, rating) {
   const now = Date.now();
   const ONE_MINUTE = 60 * 1000, ONE_HOUR = 60 * ONE_MINUTE, ONE_DAY = 24 * ONE_HOUR;
@@ -2482,20 +2292,17 @@ function calculateNextReview(card, rating) {
 
   switch (rating) {
     case 'again': {
-      // 未学習（Lv.0）の場合はLv.1へ移行
       if (currentLv === 0) {
         currentLv = 1;
         consecutiveAgain = 1;
         nextInterval = LEVEL_INTERVAL_TABLE[1];
-        nextDueDate = now + 1 * ONE_MINUTE; // すぐ復習できるように1分後
+        nextDueDate = now + 1 * ONE_MINUTE;
       } else {
-        // 1回目なら2下がる、2回以上連続なら3下がる（最低点Lv.1保証）
         const dropStep = (consecutiveAgain === 0) ? 2 : 3;
         const newLv = Math.max(1, currentLv - dropStep);
         consecutiveAgain += 1;
         nextInterval = LEVEL_INTERVAL_TABLE[newLv];
 
-        // Lv.1に落ちた場合は1分後、それ以上なら該当レベルの日数後
         if (newLv === 1) {
           nextDueDate = now + 1 * ONE_MINUTE;
         } else {
@@ -2507,14 +2314,12 @@ function calculateNextReview(card, rating) {
     }
 
     case 'hard': {
-      consecutiveAgain = 0; // 連続もう一度カウントをリセット
-
+      consecutiveAgain = 0;
       if (currentLv === 0) {
         currentLv = 1;
         nextInterval = LEVEL_INTERVAL_TABLE[1];
         nextDueDate = now + 12 * ONE_HOUR;
       } else {
-        // 難しいを押したときは1段階下がる（最低点Lv.1保証）
         const newLv = Math.max(1, currentLv - 1);
         nextInterval = LEVEL_INTERVAL_TABLE[newLv];
         if (newLv === 1) {
@@ -2529,13 +2334,11 @@ function calculateNextReview(card, rating) {
     }
 
     case 'good': {
-      consecutiveAgain = 0; // 連続もう一度カウントをリセット
-
+      consecutiveAgain = 0;
       if (reps === 0) nextInterval = 1; 
       else if (reps === 1) nextInterval = 3; 
       else nextInterval = Math.round(nextInterval * ease);
       
-      // レベルが下がった後の復帰時など、最低でも現在レベル以上の間隔を保証
       if (currentLv > 0 && currentLv <= 11) {
         nextInterval = Math.max(nextInterval, LEVEL_INTERVAL_TABLE[Math.min(11, currentLv + 1)]);
       }
@@ -2546,8 +2349,7 @@ function calculateNextReview(card, rating) {
     }
 
     case 'easy': {
-      consecutiveAgain = 0; // 連続もう一度カウントをリセット
-
+      consecutiveAgain = 0;
       if (reps === 0) nextInterval = 4; 
       else nextInterval = Math.round(nextInterval * ease * 1.3);
 
@@ -2562,7 +2364,6 @@ function calculateNextReview(card, rating) {
     }
   }
 
-  // 1. 引数のカードを更新
   card.interval = nextInterval; 
   card.easeFactor = ease; 
   card.reps = reps; 
@@ -2570,7 +2371,6 @@ function calculateNextReview(card, rating) {
   card.lastStudied = now;
   card.consecutiveAgain = consecutiveAgain;
 
-  // 2. デッキ本体の実体カードを直接特定して確実に同期
   if (currentDeck && Array.isArray(currentDeck.cards)) {
     const targetInDeck = currentDeck.cards.find(c => c.id === card.id);
     if (targetInDeck) {
@@ -2583,7 +2383,6 @@ function calculateNextReview(card, rating) {
     }
   }
 
-  // 3. 全デッキ配列のカードも念のため同期
   decks.forEach(d => {
     if (d.cards) {
       const match = d.cards.find(c => c.id === card.id);
@@ -2777,131 +2576,6 @@ function hideCurrentCard(event) {
   }
 }
 
-/* =====================================================================
- * 非表示カードの管理（全デッキ・個別デッキ両対応）
- * ===================================================================== */
-
-let hiddenCardsContext = 'ALL';
-
-function openAllHiddenCardsModal() {
-  hiddenCardsContext = 'ALL';
-  renderHiddenCardsList();
-  if (hiddenCardsModal) hiddenCardsModal.classList.remove('hidden');
-}
-
-function openDeckHiddenCardsModal() {
-  if (!targetDeckForSettings) return;
-  hiddenCardsContext = 'DECK';
-  renderHiddenCardsList();
-  if (hiddenCardsModal) hiddenCardsModal.classList.remove('hidden');
-}
-
-function closeHiddenCardsModal() {
-  if (hiddenCardsModal) hiddenCardsModal.classList.add('hidden');
-}
-
-function renderHiddenCardsList() {
-  if (!hiddenCardsListContainer) return;
-  hiddenCardsListContainer.innerHTML = '';
-
-  const titleEl = document.getElementById('hidden-cards-modal-title');
-  const restoreAllBtn = document.getElementById('restore-all-hidden-btn');
-
-  let hiddenCards = [];
-
-  if (hiddenCardsContext === 'DECK') {
-    const deck = decks.find(d => d.id === targetDeckForSettings);
-    if (!deck) return;
-    if (titleEl) titleEl.textContent = `👀 非表示カード (${deck.title})`;
-    if (restoreAllBtn) restoreAllBtn.textContent = 'このデッキをすべて再表示';
-
-    (deck.cards || []).forEach(card => {
-      if (card && card.isHidden === true) {
-        hiddenCards.push({ deckId: deck.id, deckTitle: deck.title, card: card });
-      }
-    });
-  } else {
-    if (titleEl) titleEl.textContent = '👀 非表示カード一覧（すべてのデッキ）';
-    if (restoreAllBtn) restoreAllBtn.textContent = 'すべてのカードを再表示';
-
-    decks.forEach(deck => {
-      (deck.cards || []).forEach(card => {
-        if (card && card.isHidden === true) {
-          hiddenCards.push({ deckId: deck.id, deckTitle: deck.title, card: card });
-        }
-      });
-    });
-  }
-
-  if (hiddenCards.length === 0) {
-    hiddenCardsListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-sub);">非表示のカードはありません。</div>`;
-    if (restoreAllBtn) restoreAllBtn.style.display = 'none';
-    return;
-  }
-  if (restoreAllBtn) restoreAllBtn.style.display = 'inline-block';
-
-  hiddenCards.forEach(item => {
-    const cardEl = document.createElement('div'); 
-    cardEl.className = 'card-item';
-    cardEl.innerHTML = `
-      <div class="card-item-info">
-        <div class="card-item-deck-title">from ${item.deckTitle}</div>
-        <div class="card-item-q">Q. ${item.card.question}</div>
-        <div class="card-item-a">A. ${item.card.answer}</div>
-      </div>
-      <div style="display:flex; align-items: center; flex-shrink:0;">
-        <button type="button" class="btn-small" onclick="restoreSingleHiddenCardUniversal('${item.deckId}', '${item.card.id}')">再表示する</button>
-      </div>
-    `;
-    hiddenCardsListContainer.appendChild(cardEl);
-  });
-}
-
-function restoreSingleHiddenCardUniversal(deckId, cardId) {
-  const deck = decks.find(d => d.id === deckId);
-  if (deck) {
-    const card = (deck.cards || []).find(c => c.id === cardId);
-    if (card) {
-      card.isHidden = false;
-      saveDecks();
-      renderHiddenCardsList();
-      renderMenu();
-    }
-  }
-}
-
-function restoreAllHiddenCardsUniversal() {
-  if (hiddenCardsContext === 'DECK') {
-    const deck = decks.find(d => d.id === targetDeckForSettings);
-    if (!deck) return;
-    if (confirm(`デッキ「${deck.title}」のすべての非表示カードを再表示しますか？`)) {
-      (deck.cards || []).forEach(c => { c.isHidden = false; });
-      saveDecks();
-      renderHiddenCardsList();
-      renderMenu();
-      alert('このデッキの非表示カードをすべて再表示しました。');
-    }
-  } else {
-    if (confirm('すべてのデッキに含まれる非表示カードを一括で再表示しますか？')) {
-      let modified = false;
-      decks.forEach(deck => {
-        (deck.cards || []).forEach(card => {
-          if (card && card.isHidden === true) {
-            card.isHidden = false;
-            modified = true;
-          }
-        });
-      });
-      if (modified) {
-        saveDecks();
-        renderHiddenCardsList();
-        renderMenu();
-        alert('すべての非表示カードを再表示しました。');
-      }
-    }
-  }
-}
-
 function finishTypingUI() {
   if (!stopTime) stopTime = Date.now();
   const elapsedSeconds = ((stopTime - startTime) / 1000).toFixed(1);
@@ -2967,21 +2641,33 @@ function advanceQuizState() {
   }
 }
 
-function handleAnswer(rating) {
-  markUserActivity();
-  if (state !== 'ANSWERED' || !currentCard) return;
-
-  const oldLevelInfo = sessionInitialCardLevels[currentCard.id] || getCardLevelInfo(currentCard);
-
-  undoStack.push({
+/**
+ * 学習スナップショット生成（Undo/Redo完全対応）
+ */
+function createStudySnapshot() {
+  return {
     queue: JSON.parse(JSON.stringify(studyQueue)),
     card: JSON.parse(JSON.stringify(currentCard)),
     studyLogs: JSON.parse(JSON.stringify(studyLogs)),
     dailyStudyHistory: JSON.parse(JSON.stringify(dailyStudyHistory)),
     deckInfo: JSON.parse(JSON.stringify(decks.find(d => d.id === currentDeck.id))),
     sessionHistory: JSON.parse(JSON.stringify(sessionAnswerHistory)),
-    sessionCount: sessionStudiedCount
-  });
+    sessionCount: sessionStudiedCount,
+    userExp: userExp,
+    userLevel: userLevel,
+    userAchievements: JSON.parse(JSON.stringify(userAchievements)),
+    pendingAlerts: JSON.parse(JSON.stringify(pendingAchievementAlerts))
+  };
+}
+
+function handleAnswer(rating) {
+  markUserActivity();
+  if (state !== 'ANSWERED' || !currentCard) return;
+
+  const oldLevelInfo = sessionInitialCardLevels[currentCard.id] || getCardLevelInfo(currentCard);
+
+  // 完全なスナップショットをスタックに積む
+  undoStack.push(createStudySnapshot());
   redoStack = [];
 
   recordStudyLog(currentCard, rating);
@@ -3128,15 +2814,7 @@ function undoLastAnswer(event) {
   markUserActivity();
   if (undoStack.length === 0) return;
 
-  redoStack.push({
-    queue: JSON.parse(JSON.stringify(studyQueue)),
-    card: JSON.parse(JSON.stringify(currentCard)),
-    studyLogs: JSON.parse(JSON.stringify(studyLogs)),
-    dailyStudyHistory: JSON.parse(JSON.stringify(dailyStudyHistory)),
-    deckInfo: JSON.parse(JSON.stringify(decks.find(d => d.id === currentDeck.id))),
-    sessionHistory: JSON.parse(JSON.stringify(sessionAnswerHistory)),
-    sessionCount: sessionStudiedCount
-  });
+  redoStack.push(createStudySnapshot());
 
   const previousState = undoStack.pop();
   studyQueue = previousState.queue; 
@@ -3146,13 +2824,26 @@ function undoLastAnswer(event) {
   sessionAnswerHistory = previousState.sessionHistory || [];
   sessionStudiedCount = previousState.sessionCount || 0;
 
+  // ゲーミフィケーション状態の完全巻き戻し
+  if (previousState.userExp !== undefined) {
+    userExp = previousState.userExp;
+    userLevel = previousState.userLevel;
+    userAchievements = previousState.userAchievements || {};
+    pendingAchievementAlerts = previousState.pendingAlerts || [];
+    updateUserLevelFromExp();
+    saveGamificationData();
+  }
+
   const deckIdx = decks.findIndex(d => d.id === currentDeck.id);
   if (deckIdx !== -1 && previousState.deckInfo) {
     decks[deckIdx] = previousState.deckInfo;
     currentDeck = decks[deckIdx];
   }
 
-  saveDecks(); saveLogs(); saveDailyHistory(); loadNextCard();
+  saveDecks(); 
+  saveLogs(); 
+  saveDailyHistory(); 
+  loadNextCard();
 }
 
 function redoLastAnswer(event) {
@@ -3160,15 +2851,7 @@ function redoLastAnswer(event) {
   markUserActivity();
   if (redoStack.length === 0) return;
 
-  undoStack.push({
-    queue: JSON.parse(JSON.stringify(studyQueue)),
-    card: JSON.parse(JSON.stringify(currentCard)),
-    studyLogs: JSON.parse(JSON.stringify(studyLogs)),
-    dailyStudyHistory: JSON.parse(JSON.stringify(dailyStudyHistory)),
-    deckInfo: JSON.parse(JSON.stringify(decks.find(d => d.id === currentDeck.id))),
-    sessionHistory: JSON.parse(JSON.stringify(sessionAnswerHistory)),
-    sessionCount: sessionStudiedCount
-  });
+  undoStack.push(createStudySnapshot());
 
   const nextState = redoStack.pop();
   studyQueue = nextState.queue; 
@@ -3178,13 +2861,26 @@ function redoLastAnswer(event) {
   sessionAnswerHistory = nextState.sessionHistory || [];
   sessionStudiedCount = nextState.sessionCount || 0;
 
+  // ゲーミフィケーション状態の再適用
+  if (nextState.userExp !== undefined) {
+    userExp = nextState.userExp;
+    userLevel = nextState.userLevel;
+    userAchievements = nextState.userAchievements || {};
+    pendingAchievementAlerts = nextState.pendingAlerts || [];
+    updateUserLevelFromExp();
+    saveGamificationData();
+  }
+
   const deckIdx = decks.findIndex(d => d.id === currentDeck.id);
   if (deckIdx !== -1 && nextState.deckInfo) {
     decks[deckIdx] = nextState.deckInfo;
     currentDeck = decks[deckIdx];
   }
 
-  saveDecks(); saveLogs(); saveDailyHistory(); loadNextCard();
+  saveDecks(); 
+  saveLogs(); 
+  saveDailyHistory(); 
+  loadNextCard();
 }
 
 function updateUndoRedoUI() {
@@ -3193,7 +2889,132 @@ function updateUndoRedoUI() {
 }
 
 /* =====================================================================
- * 16. 長押しジェスチャー制御
+ * 16. 非表示カードの管理
+ * ===================================================================== */
+
+let hiddenCardsContext = 'ALL';
+
+function openAllHiddenCardsModal() {
+  hiddenCardsContext = 'ALL';
+  renderHiddenCardsList();
+  openModal(hiddenCardsModal);
+}
+
+function openDeckHiddenCardsModal() {
+  if (!targetDeckForSettings) return;
+  hiddenCardsContext = 'DECK';
+  renderHiddenCardsList();
+  openModal(hiddenCardsModal);
+}
+
+function closeHiddenCardsModal() {
+  closeModal(hiddenCardsModal);
+}
+
+function renderHiddenCardsList() {
+  if (!hiddenCardsListContainer) return;
+  hiddenCardsListContainer.innerHTML = '';
+
+  const titleEl = document.getElementById('hidden-cards-modal-title');
+  const restoreAllBtn = document.getElementById('restore-all-hidden-btn');
+
+  let hiddenCards = [];
+
+  if (hiddenCardsContext === 'DECK') {
+    const deck = decks.find(d => d.id === targetDeckForSettings);
+    if (!deck) return;
+    if (titleEl) titleEl.textContent = `👀 非表示カード (${deck.title})`;
+    if (restoreAllBtn) restoreAllBtn.textContent = 'このデッキをすべて再表示';
+
+    (deck.cards || []).forEach(card => {
+      if (card && card.isHidden === true) {
+        hiddenCards.push({ deckId: deck.id, deckTitle: deck.title, card: card });
+      }
+    });
+  } else {
+    if (titleEl) titleEl.textContent = '👀 非表示カード一覧（すべてのデッキ）';
+    if (restoreAllBtn) restoreAllBtn.textContent = 'すべてのカードを再表示';
+
+    decks.forEach(deck => {
+      (deck.cards || []).forEach(card => {
+        if (card && card.isHidden === true) {
+          hiddenCards.push({ deckId: deck.id, deckTitle: deck.title, card: card });
+        }
+      });
+    });
+  }
+
+  if (hiddenCards.length === 0) {
+    hiddenCardsListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-sub);">非表示のカードはありません。</div>`;
+    if (restoreAllBtn) restoreAllBtn.style.display = 'none';
+    return;
+  }
+  if (restoreAllBtn) restoreAllBtn.style.display = 'inline-block';
+
+  hiddenCards.forEach(item => {
+    const cardEl = document.createElement('div'); 
+    cardEl.className = 'card-item';
+    cardEl.innerHTML = `
+      <div class="card-item-info">
+        <div class="card-item-deck-title">from ${item.deckTitle}</div>
+        <div class="card-item-q">Q. ${item.card.question}</div>
+        <div class="card-item-a">A. ${item.card.answer}</div>
+      </div>
+      <div style="display:flex; align-items: center; flex-shrink:0;">
+        <button type="button" class="btn-small" onclick="restoreSingleHiddenCardUniversal('${item.deckId}', '${item.card.id}')">再表示する</button>
+      </div>
+    `;
+    hiddenCardsListContainer.appendChild(cardEl);
+  });
+}
+
+function restoreSingleHiddenCardUniversal(deckId, cardId) {
+  const deck = decks.find(d => d.id === deckId);
+  if (deck) {
+    const card = (deck.cards || []).find(c => c.id === cardId);
+    if (card) {
+      card.isHidden = false;
+      saveDecks();
+      renderHiddenCardsList();
+      renderMenu();
+    }
+  }
+}
+
+function restoreAllHiddenCardsUniversal() {
+  if (hiddenCardsContext === 'DECK') {
+    const deck = decks.find(d => d.id === targetDeckForSettings);
+    if (!deck) return;
+    if (confirm(`デッキ「${deck.title}」のすべての非表示カードを再表示しますか？`)) {
+      (deck.cards || []).forEach(c => { c.isHidden = false; });
+      saveDecks();
+      renderHiddenCardsList();
+      renderMenu();
+      alert('このデッキの非表示カードをすべて再表示しました。');
+    }
+  } else {
+    if (confirm('すべてのデッキに含まれる非表示カードを一括で再表示しますか？')) {
+      let modified = false;
+      decks.forEach(deck => {
+        (deck.cards || []).forEach(card => {
+          if (card && card.isHidden === true) {
+            card.isHidden = false;
+            modified = true;
+          }
+        });
+      });
+      if (modified) {
+        saveDecks();
+        renderHiddenCardsList();
+        renderMenu();
+        alert('すべての非表示カードを再表示しました。');
+      }
+    }
+  }
+}
+
+/* =====================================================================
+ * 17. 長押しジェスチャー制御
  * ===================================================================== */
 
 function startHoldAction() {
@@ -3270,7 +3091,7 @@ function endHoldAction() {
 }
 
 /* =====================================================================
- * 17. グローバルイベントリスナー
+ * 18. グローバルイベントリスナー
  * ===================================================================== */
 
 function setupEventListeners() {
@@ -3365,6 +3186,15 @@ function setupEventListeners() {
 
   document.addEventListener('keydown', (e) => {
     markUserActivity();
+
+    // Escape キーで最前面のモーダルを閉じる
+    if (e.key === 'Escape') {
+      if (closeTopModal()) {
+        e.preventDefault();
+        return;
+      }
+    }
+
     if (bindingKeyTarget) {
       e.preventDefault();
       const keyName = e.code === 'Space' ? 'Space' : e.key;
@@ -3378,6 +3208,9 @@ function setupEventListeners() {
 
     const activeTag = document.activeElement ? document.activeElement.tagName : '';
     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
+    // モーダルが開いている間はクイズショートカットを無効化
+    if (modalStack.length > 0) return;
 
     if (quizScreen && !quizScreen.classList.contains('hidden')) {
       const kb = userConfig.keyBinds || DEFAULT_KEY_BINDS;
@@ -3409,6 +3242,251 @@ function setupEventListeners() {
       reader.onload = event => processCsvText(event.target.result, file.name);
       reader.readAsText(file, 'UTF-8');
     });
+  }
+}
+
+/* =====================================================================
+ * 19. アプリケーション初期化
+ * ===================================================================== */
+
+function removeCardFromHistory(cardId) {
+  let modified = false;
+  Object.keys(dailyStudyHistory).forEach((dateKey) => {
+    if (dailyStudyHistory[dateKey] && dailyStudyHistory[dateKey][cardId]) {
+      delete dailyStudyHistory[dateKey][cardId];
+      modified = true;
+    }
+  });
+  if (modified) saveDailyHistory();
+}
+
+function recordStudyLog(card, rating) {
+  const todayStr = getFormattedDate(new Date());
+  if (!studyLogs[todayStr]) studyLogs[todayStr] = 0;
+  studyLogs[todayStr] += 1;
+  saveLogs();
+
+  if (!dailyStudyHistory[todayStr]) dailyStudyHistory[todayStr] = {};
+  if (!dailyStudyHistory[todayStr][card.id]) {
+    dailyStudyHistory[todayStr][card.id] = {
+      card: { question: card.question, answer: card.answer },
+      deckTitle: currentDeck ? currentDeck.title : '',
+      againCount: 0, totalCount: 0, lastStudiedTime: Date.now()
+    };
+  }
+  dailyStudyHistory[todayStr][card.id].lastStudiedTime = Date.now();
+  if (currentDeck) dailyStudyHistory[todayStr][card.id].deckTitle = currentDeck.title;
+  dailyStudyHistory[todayStr][card.id].totalCount += 1;
+  if (rating === 'again') dailyStudyHistory[todayStr][card.id].againCount += 1;
+  saveDailyHistory();
+
+  if (userConfig.enableGamification) {
+    addExpForRating(rating);
+    checkCardStudyAchievements();
+  }
+}
+
+function getFormattedDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function applyConfigUI() {
+  document.body.className = `theme-${userConfig.theme}`;
+  document.documentElement.style.setProperty('--font-base', `${userConfig.fontSize}px`);
+  document.documentElement.style.setProperty('--preview-font-size', `${tempFontSize}px`);
+
+  const themeRadio = document.querySelector(`input[name="theme-option"][value="${userConfig.theme}"]`);
+  if (themeRadio) themeRadio.checked = true;
+
+  if (fontSizeRange) fontSizeRange.value = tempFontSize;
+  if (fontSizeValueDisplay) fontSizeValueDisplay.textContent = tempFontSize;
+
+  const modeRadio = document.querySelector(`input[name="mode-option"][value="${userConfig.mode}"]`);
+  if (modeRadio) modeRadio.checked = true;
+
+  const modeDescEl = document.getElementById('mode-description-text');
+  if (modeDescEl) {
+    if (userConfig.mode === 'NORMAL') modeDescEl.textContent = '問題文全表示の単語帳のようなモード。';
+    else if (userConfig.mode === 'FAST') modeDescEl.textContent = '問題文が1文字ずつ表示されるモード。早押しクイズの形式を再現。';
+  }
+
+  const sortRadio = document.querySelector(`input[name="sort-option"][value="${userConfig.deckSortOrder}"]`);
+  if (sortRadio) sortRadio.checked = true;
+
+  if (charSpeedRange) charSpeedRange.value = userConfig.charSpeed;
+  if (speedValueDisplay) speedValueDisplay.textContent = userConfig.charSpeed;
+
+  const speedDisabledNotice = document.getElementById('speed-disabled-notice');
+  if (speedOptionGroup) {
+    const isFastMode = (userConfig.mode === 'FAST');
+    if (charSpeedRange) charSpeedRange.disabled = !isFastMode;
+    speedOptionGroup.style.opacity = isFastMode ? '1' : '0.4';
+    speedOptionGroup.style.pointerEvents = isFastMode ? 'auto' : 'none';
+    if (speedDisabledNotice) speedDisabledNotice.style.display = isFastMode ? 'none' : 'block';
+    if (isFastMode) startPreviewTyping(); else clearInterval(previewTimer);
+  }
+
+  const cbLongPress = document.getElementById('toggle-long-press');
+  if (cbLongPress) cbLongPress.checked = userConfig.enableLongPress;
+
+  const isLongPressGlobalEnabled = userConfig.enableLongPress;
+  const isNormalMode = (userConfig.mode === 'NORMAL');
+
+  const holdQGroup = document.getElementById('hold-q-group');
+  const rangeHoldSpeedQ = document.getElementById('hold-speed-q-range');
+  const dispHoldSpeedQ = document.getElementById('hold-speed-q-display');
+  if (rangeHoldSpeedQ) rangeHoldSpeedQ.value = userConfig.holdSpeedQ || 0.2;
+  if (dispHoldSpeedQ) dispHoldSpeedQ.textContent = (userConfig.holdSpeedQ || 0.2).toFixed(1);
+
+  if (holdQGroup && rangeHoldSpeedQ) {
+    const shouldDisableQ = !isLongPressGlobalEnabled || isNormalMode;
+    rangeHoldSpeedQ.disabled = shouldDisableQ;
+    holdQGroup.style.opacity = shouldDisableQ ? '0.4' : '1';
+    holdQGroup.style.pointerEvents = shouldDisableQ ? 'none' : 'auto';
+  }
+
+  const holdAGroup = document.getElementById('hold-a-group');
+  const rangeHoldSpeedA = document.getElementById('hold-speed-a-range');
+  const dispHoldSpeedA = document.getElementById('hold-speed-a-display');
+  if (rangeHoldSpeedA) rangeHoldSpeedA.value = userConfig.holdSpeedA || 1.0;
+  if (dispHoldSpeedA) dispHoldSpeedA.textContent = (userConfig.holdSpeedA || 1.0).toFixed(1);
+
+  if (holdAGroup && rangeHoldSpeedA) {
+    const shouldDisableA = !isLongPressGlobalEnabled;
+    rangeHoldSpeedA.disabled = shouldDisableA;
+    holdAGroup.style.opacity = shouldDisableA ? '0.4' : '1';
+    holdAGroup.style.pointerEvents = shouldDisableA ? 'none' : 'auto';
+  }
+
+  const cbCardLevel = document.getElementById('toggle-card-level');
+  if (cbCardLevel) cbCardLevel.checked = userConfig.enableCardLevel;
+
+  const cbReviewResult = document.getElementById('toggle-review-result');
+  if (cbReviewResult) cbReviewResult.checked = !!userConfig.enableReviewResult;
+
+  const reviewIntContainer = document.getElementById('review-interval-container');
+  const inputReviewInt = document.getElementById('review-interval-input');
+  if (inputReviewInt) inputReviewInt.value = userConfig.reviewInterval || 50;
+  if (reviewIntContainer) {
+    reviewIntContainer.style.opacity = userConfig.enableReviewResult ? '1' : '0.4';
+    reviewIntContainer.style.pointerEvents = userConfig.enableReviewResult ? 'auto' : 'none';
+  }
+
+  const cbGamification = document.getElementById('toggle-gamification');
+  if (cbGamification) cbGamification.checked = !!userConfig.enableGamification;
+
+  const tabAchievementsBtn = document.getElementById('tab-btn-achievements');
+  if (tabAchievementsBtn) {
+    if (userConfig.enableGamification) {
+      tabAchievementsBtn.classList.remove('hidden');
+    } else {
+      tabAchievementsBtn.classList.add('hidden');
+      const tabAchievements = document.getElementById('stats-tab-achievements');
+      if (tabAchievements && !tabAchievements.classList.contains('hidden')) {
+        switchStatsTab('daily');
+      }
+    }
+  }
+
+  const cbTextSelection = document.getElementById('toggle-text-selection');
+  if (cbTextSelection) cbTextSelection.checked = userConfig.enableTextSelection;
+
+  const cbRemoveSpaceBtn = document.getElementById('toggle-remove-space-btn');
+  if (cbRemoveSpaceBtn) cbRemoveSpaceBtn.checked = userConfig.enableRemoveSpaceBtn;
+
+  updateKeyBindButtons();
+}
+
+async function initApp() {
+  try {
+    initDOMElements();
+    await migrateLocalStorage();
+
+    const savedConfig = await idbGet('memoly_config');
+    if (savedConfig) {
+      userConfig = { ...DEFAULT_USER_CONFIG, ...savedConfig };
+      if (typeof userConfig.fontSize === 'string') userConfig.fontSize = 15;
+      if (userConfig.holdSpeedQ === undefined) userConfig.holdSpeedQ = userConfig.holdSpeed || 0.2;
+      if (userConfig.holdSpeedA === undefined) userConfig.holdSpeedA = userConfig.holdSpeed || 1.0;
+      if (userConfig.enableReviewResult === undefined) userConfig.enableReviewResult = false;
+      if (userConfig.reviewInterval === undefined) userConfig.reviewInterval = 50;
+      if (userConfig.enableGamification === undefined) userConfig.enableGamification = false;
+      if (userConfig.dailyGoalCards === undefined) userConfig.dailyGoalCards = 50;
+      if (userConfig.dailyGoalMinutes === undefined) userConfig.dailyGoalMinutes = 15;
+      if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = false;
+      if (userConfig.enableRemoveSpaceBtn === undefined) userConfig.enableRemoveSpaceBtn = false;
+      if (!userConfig.keyBinds) userConfig.keyBinds = JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS));
+    }
+    tempFontSize = userConfig.fontSize;
+
+    const savedDecks = await idbGet('memoly_decks');
+    if (Array.isArray(savedDecks) && savedDecks.length > 0) {
+      decks = savedDecks;
+      decks.forEach(d => {
+        if (!d.orderMode) d.orderMode = 'SHUFFLE';
+        if (d.excludeStar === undefined) d.excludeStar = false;
+        if (!d.lastStudied) d.lastStudied = 0;
+        if (!Array.isArray(d.cards)) d.cards = [];
+        d.cards.forEach(c => {
+          if (c.isHidden === undefined) c.isHidden = false;
+          if (c.consecutiveAgain === undefined) c.consecutiveAgain = 0;
+          if (c.lastStudied === undefined) c.lastStudied = 0;
+        });
+      });
+    } else { 
+      decks = JSON.parse(JSON.stringify(defaultDecks)); 
+      await idbSet('memoly_decks', decks); 
+    }
+
+    const savedTrash = await idbGet('memoly_trash_decks');
+    if (Array.isArray(savedTrash)) trashDecks = savedTrash;
+
+    const savedLogs = await idbGet('memoly_logs');
+    if (savedLogs) studyLogs = savedLogs;
+
+    const savedDaily = await idbGet('memoly_daily_history');
+    if (savedDaily) dailyStudyHistory = savedDaily;
+
+    const savedTimes = await idbGet('memoly_study_times');
+    if (savedTimes) studyTimes = savedTimes;
+
+    const savedExp = await idbGet('memoly_user_exp');
+    if (typeof savedExp === 'number') userExp = savedExp;
+
+    const savedAch = await idbGet('memoly_user_achievements');
+    if (savedAch && typeof savedAch === 'object') userAchievements = savedAch;
+
+    updateUserLevelFromExp();
+    checkRetroactiveAchievements();
+
+    setupEventListeners();
+    setupOptionPreviewEventListeners();
+    setupActivityListeners();
+
+    setupImageDropZone('add-card-img-drop-zone', 'add-card-img-input', (dataUrl) => {
+      currentAddingImageData = dataUrl;
+      if(addCardImgElement) addCardImgElement.src = dataUrl;
+      if(addCardImgPreview) addCardImgPreview.classList.remove('hidden');
+    });
+
+    setupImageDropZone('edit-card-img-drop-zone', 'edit-card-img-input', (dataUrl) => {
+      currentEditingImageData = dataUrl;
+      if(editCardImgElement) editCardImgElement.src = dataUrl;
+      if(editCardImgPreview) editCardImgPreview.classList.remove('hidden');
+    });
+
+    selectedCalendarDateStr = getFormattedDate(new Date());
+
+    applyConfigUI();
+    showMenu();
+    checkPendingAchievementPopup();
+  } catch (err) {
+    console.error('[memoly 初期化エラー]', err);
+    decks = JSON.parse(JSON.stringify(defaultDecks));
+    showMenu();
   }
 }
 
