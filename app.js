@@ -1,6 +1,6 @@
 /**
  * =====================================================================
- * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.1.6.2
+ * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.1.6.4
  * ===================================================================== */
 
 /* =====================================================================
@@ -25,6 +25,8 @@ const defaultDecks = [
         interval: 0,
         easeFactor: 2.5,
         reps: 0,
+        lastStudied: 0,
+        consecutiveAgain: 0,
         isHidden: false
       },
       {
@@ -37,6 +39,8 @@ const defaultDecks = [
         interval: 0,
         easeFactor: 2.5,
         reps: 0,
+        lastStudied: 0,
+        consecutiveAgain: 0,
         isHidden: false
       }
     ]
@@ -68,7 +72,7 @@ const DEFAULT_USER_CONFIG = {
   dailyGoalCards: 50,
   dailyGoalMinutes: 15,
   enableTextSelection: false,
-  enableRemoveSpaceBtn: true, // ←半角スペース削除ボタンの表示フラグ
+  enableRemoveSpaceBtn: false,
   keyBinds: { ...DEFAULT_KEY_BINDS }
 };
 
@@ -650,7 +654,7 @@ function removeEditCardImage() {
 }
 
 function setupImageDropZone(dropZoneId, inputId, onImageLoaded) {
-  const dropZone = document.getElementById(dropZoneId);
+  const dropZone = document.getElementById('drop-zone');
   const input = document.getElementById(inputId);
   if (!dropZone || !input) return;
 
@@ -661,19 +665,15 @@ function setupImageDropZone(dropZoneId, inputId, onImageLoaded) {
 
   dropZone.addEventListener('drop', (e) => {
     const files = e.dataTransfer.files;
-    if (files.length) handleImageFile(files[0]);
+    if (files.length > 0) {
+      const file = files[0];
+      if (!file.name.toLowerCase().endsWith('.csv')) { alert('CSVファイルのみ追加可能です。'); return; }
+      const reader = new FileReader();
+      reader.onload = event => processCsvText(event.target.result, file.name);
+      reader.readAsText(file, 'UTF-8');
+    }
   });
-  input.addEventListener('change', (e) => {
-    if (e.target.files.length) handleImageFile(e.target.files[0]);
-  });
-
-  async function handleImageFile(file) {
-    if (!file.type.startsWith('image/')) { alert('画像ファイルを選択してください。'); return; }
-    try {
-      const dataUrl = await resizeImage(file, 600, 600, 0.7);
-      onImageLoaded(dataUrl);
-    } catch (err) { alert('画像の処理に失敗しました。'); }
-  }
+  dropZone.addEventListener('click', () => { if (csvInput) csvInput.click(); });
 }
 
 /* =====================================================================
@@ -697,7 +697,7 @@ async function initApp() {
       if (userConfig.dailyGoalCards === undefined) userConfig.dailyGoalCards = 50;
       if (userConfig.dailyGoalMinutes === undefined) userConfig.dailyGoalMinutes = 15;
       if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = false;
-      if (userConfig.enableRemoveSpaceBtn === undefined) userConfig.enableRemoveSpaceBtn = false; // ←初期値の補完
+      if (userConfig.enableRemoveSpaceBtn === undefined) userConfig.enableRemoveSpaceBtn = false;
       if (!userConfig.keyBinds) userConfig.keyBinds = JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS));
     }
     tempFontSize = userConfig.fontSize;
@@ -712,6 +712,8 @@ async function initApp() {
         if (!Array.isArray(d.cards)) d.cards = [];
         d.cards.forEach(c => {
           if (c.isHidden === undefined) c.isHidden = false;
+          if (c.consecutiveAgain === undefined) c.consecutiveAgain = 0;
+          if (c.lastStudied === undefined) c.lastStudied = 0;
         });
       });
     } else { 
@@ -914,7 +916,6 @@ function applyConfigUI() {
   const cbTextSelection = document.getElementById('toggle-text-selection');
   if (cbTextSelection) cbTextSelection.checked = userConfig.enableTextSelection;
 
-  // 半角スペース削除ボタントグルの反映
   const cbRemoveSpaceBtn = document.getElementById('toggle-remove-space-btn');
   if (cbRemoveSpaceBtn) cbRemoveSpaceBtn.checked = userConfig.enableRemoveSpaceBtn;
 
@@ -1152,7 +1153,7 @@ function renderAllTimeStats() {
     let deckAllStar = (activeCards.length > 0);
 
     activeCards.forEach(card => {
-      if ((card.reps && card.reps > 0) || (card.dueDate && card.dueDate > 0)) {
+      if ((card.reps && card.reps > 0) || (card.dueDate && card.dueDate > 0) || (card.lastStudied && card.lastStudied > 0)) {
         totalNewCards++;
         deckHasPlayed = true;
       }
@@ -1175,12 +1176,18 @@ function changeTodayCardsSortOrder(order) {
   renderTodayStudiedList(); 
 }
 
+// 【暗記レベル判定関数】一度でも解いたカードはLv.0に戻らない
 function getCardLevelInfo(card) {
   if (!card) return { level: 0, score: 0, color: '#9ca3af' };
   let level = 1, score = 0;
   const val = card.interval || 0, reps = card.reps || 0, dueDate = card.dueDate || 0;
+  const lastStudied = card.lastStudied || 0;
 
-  if (val === 0 && reps === 0 && dueDate === 0) { level = 0; score = 0; }
+  // 未学習（一度も解かれていない）のみ「レベル0」
+  if (val === 0 && reps === 0 && dueDate === 0 && lastStudied === 0) {
+    level = 0; 
+    score = 0; 
+  }
   else if (val >= 30) { level = '★'; score = 1.0; }
   else if (val >= 21) { level = 10; score = 0.8; }
   else if (val >= 14) { level = 9; score = 0.6; }
@@ -1191,7 +1198,11 @@ function getCardLevelInfo(card) {
   else if (val >= 2)  { level = 4; score = 0.2; }
   else if (val >= 1)  { level = 3; score = 0.2; }
   else if (val >= 0.5){ level = 2; score = 0; }
-  else { level = 1; score = 0; }
+  else { 
+    // 一度でも学習されたカードは最低でもレベル1
+    level = 1; 
+    score = 0; 
+  }
 
   let bg = '#9ca3af';
   if (level === '★') bg = '#8b5cf6';
@@ -1265,8 +1276,8 @@ function renderTodayStudiedList() {
   studiedCards.forEach(item => {
     const realCard = allCardsMap[item.id];
     let levelBadgeHtml = '';
-    if (realCard && userConfig.enableCardLevel) {
-      const lvInfo = getCardLevelInfo(realCard);
+    if (userConfig.enableCardLevel) {
+      const lvInfo = realCard ? getCardLevelInfo(realCard) : { level: 1, color: 'hsl(217, 90%, 70%)' };
       levelBadgeHtml = `<div style="background-color: ${lvInfo.color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.9em; font-weight: bold;">Lv.${lvInfo.level}</div>`;
     }
 
@@ -1696,13 +1707,11 @@ function toggleGamificationOption(enabled) {
   if (enabled) checkRetroactiveAchievements();
 }
 
-// テキスト選択の許可フラグを切り替える関数
 function toggleTextSelectionOption(enabled) {
   userConfig.enableTextSelection = enabled;
   saveConfig();
 }
 
-// 半角スペース削除ボタンの表示フラグを切り替える関数
 function toggleRemoveSpaceBtnOption(enabled) {
   userConfig.enableRemoveSpaceBtn = enabled;
   saveConfig();
@@ -2002,7 +2011,12 @@ function resetDeckProgress(deckId) {
   if (!deck) return;
   if (confirm(`デッキ「${deck.title}」の学習進捗をリセットしてもよろしいですか？\n（問題と答えのデータは消去されず、すべて未学習状態に戻ります）`)) {
     (deck.cards || []).forEach(card => { 
-      card.dueDate = 0; card.interval = 0; card.easeFactor = 2.5; card.reps = 0; 
+      card.dueDate = 0; 
+      card.interval = 0; 
+      card.easeFactor = 2.5; 
+      card.reps = 0;
+      card.lastStudied = 0;
+      card.consecutiveAgain = 0; // 連続もう一度カウントもリセット
     });
     saveDecks(); 
     renderMenu(); 
@@ -2122,7 +2136,7 @@ function submitAddCard() {
     deck.cards.push({
       id: `card-${Date.now()}`, 
       question: q, answer: a, explanation: exp, image: currentAddingImageData,
-      dueDate: 0, interval: 0, easeFactor: 2.5, reps: 0, isHidden: false
+      dueDate: 0, interval: 0, easeFactor: 2.5, reps: 0, lastStudied: 0, consecutiveAgain: 0, isHidden: false
     });
     saveDecks(); renderMenu(); closeAddCardModal();
   }
@@ -2144,7 +2158,6 @@ function openEditModalForCard(card) {
     editCardImgPreview.classList.add('hidden');
   }
 
-  // 「半角space削除」ボタンの表示切替（設定がONのときのみ表示）
   const btnRemoveSpaces = document.getElementById('btn-remove-spaces');
   if (btnRemoveSpaces) {
     if (userConfig.enableRemoveSpaceBtn) {
@@ -2157,7 +2170,6 @@ function openEditModalForCard(card) {
   if (editCardModal) editCardModal.classList.remove('hidden');
 }
 
-// カード編集欄内の半角スペースを一括削除する処理
 function removeSpacesInEditCard() {
   if (editCardQ) editCardQ.value = editCardQ.value.replace(/ /g, '');
   if (editCardA) editCardA.value = editCardA.value.replace(/ /g, '');
@@ -2391,7 +2403,7 @@ function processCsvText(text, fileName = 'インポートデッキ') {
       newCards.push({
         id: `card-${Date.now()}-${i}`, 
         question: q, answer: a, explanation: exp, image: '', 
-        dueDate: 0, interval: 0, easeFactor: 2.5, reps: 0, isHidden: false
+        dueDate: 0, interval: 0, easeFactor: 2.5, reps: 0, lastStudied: 0, consecutiveAgain: 0, isHidden: false
       });
     }
   }
@@ -2434,42 +2446,158 @@ function setupDragAndDrop() {
  * 15. クイズ学習ロジック & リザルト機能
  * ===================================================================== */
 
+// 各レベル（1〜11：★）に対応する代表的な復習間隔日数テーブル
+const LEVEL_INTERVAL_TABLE = {
+  1: 0.2,   // Lv.1: 約5時間後
+  2: 0.5,   // Lv.2: 12時間後
+  3: 1,     // Lv.3: 1日後
+  4: 2,     // Lv.4: 2日後
+  5: 3,     // Lv.5: 3日後
+  6: 5,     // Lv.6: 5日後
+  7: 7,     // Lv.7: 7日後
+  8: 10,    // Lv.8: 10日後
+  9: 14,    // Lv.9: 14日後
+  10: 21,   // Lv.10: 21日後
+  11: 30    // Lv.★: 30日後
+};
+
+// カードの現在のレベルを数値（0〜11）で取得する関数
+function getCardNumericLevel(card) {
+  const info = getCardLevelInfo(card);
+  if (info.level === '★') return 11;
+  return Number(info.level) || 0;
+}
+
+// 【大幅改修】暗記レベルの段階的ダウンと最低点Lv.1保証アルゴリズム
 function calculateNextReview(card, rating) {
   const now = Date.now();
   const ONE_MINUTE = 60 * 1000, ONE_HOUR = 60 * ONE_MINUTE, ONE_DAY = 24 * ONE_HOUR;
-  let nextInterval = card.interval, ease = card.easeFactor, reps = card.reps, nextDueDate = now;
+
+  let currentLv = getCardNumericLevel(card);
+  let nextInterval = card.interval || 0;
+  let ease = card.easeFactor || 2.5;
+  let reps = card.reps || 0;
+  let nextDueDate = now;
+  let consecutiveAgain = card.consecutiveAgain || 0;
 
   switch (rating) {
-    case 'again': 
-      reps = 0; 
-      nextInterval = Math.max(0, nextInterval - 3); 
-      nextDueDate = now + 1 * ONE_MINUTE; 
+    case 'again': {
+      // 未学習（Lv.0）の場合はLv.1へ移行
+      if (currentLv === 0) {
+        currentLv = 1;
+        consecutiveAgain = 1;
+        nextInterval = LEVEL_INTERVAL_TABLE[1];
+        nextDueDate = now + 1 * ONE_MINUTE; // すぐ復習できるように1分後
+      } else {
+        // 1回目なら2下がる、2回以上連続なら3下がる（最低点Lv.1保証）
+        const dropStep = (consecutiveAgain === 0) ? 2 : 3;
+        const newLv = Math.max(1, currentLv - dropStep);
+        consecutiveAgain += 1;
+        nextInterval = LEVEL_INTERVAL_TABLE[newLv];
+
+        // Lv.1に落ちた場合は1分後、それ以上なら該当レベルの日数後
+        if (newLv === 1) {
+          nextDueDate = now + 1 * ONE_MINUTE;
+        } else {
+          nextDueDate = now + Math.round(nextInterval * ONE_DAY);
+        }
+      }
+      reps = 0;
       break;
-    case 'hard': 
-      reps = 0; 
-      nextInterval = 0.5; 
-      nextDueDate = now + 12 * ONE_HOUR; 
-      ease = Math.max(1.3, ease - 0.15); 
+    }
+
+    case 'hard': {
+      consecutiveAgain = 0; // 連続もう一度カウントをリセット
+
+      if (currentLv === 0) {
+        currentLv = 1;
+        nextInterval = LEVEL_INTERVAL_TABLE[1];
+        nextDueDate = now + 12 * ONE_HOUR;
+      } else {
+        // 難しいを押したときは1段階下がる（最低点Lv.1保証）
+        const newLv = Math.max(1, currentLv - 1);
+        nextInterval = LEVEL_INTERVAL_TABLE[newLv];
+        if (newLv === 1) {
+          nextDueDate = now + 12 * ONE_HOUR;
+        } else {
+          nextDueDate = now + Math.round(nextInterval * ONE_DAY);
+        }
+      }
+      reps = 0;
+      ease = Math.max(1.3, ease - 0.15);
       break;
-    case 'good':
+    }
+
+    case 'good': {
+      consecutiveAgain = 0; // 連続もう一度カウントをリセット
+
       if (reps === 0) nextInterval = 1; 
       else if (reps === 1) nextInterval = 3; 
       else nextInterval = Math.round(nextInterval * ease);
+      
+      // レベルが下がった後の復帰時など、最低でも現在レベル以上の間隔を保証
+      if (currentLv > 0 && currentLv <= 11) {
+        nextInterval = Math.max(nextInterval, LEVEL_INTERVAL_TABLE[Math.min(11, currentLv + 1)]);
+      }
+
       reps += 1; 
-      nextDueDate = now + nextInterval * ONE_DAY; 
+      nextDueDate = now + Math.round(nextInterval * ONE_DAY); 
       break;
-    case 'easy':
+    }
+
+    case 'easy': {
+      consecutiveAgain = 0; // 連続もう一度カウントをリセット
+
       if (reps === 0) nextInterval = 4; 
       else nextInterval = Math.round(nextInterval * ease * 1.3);
+
+      if (currentLv > 0 && currentLv <= 11) {
+        nextInterval = Math.max(nextInterval, LEVEL_INTERVAL_TABLE[Math.min(11, currentLv + 2)]);
+      }
+
       reps += 1; 
       ease += 0.15; 
-      nextDueDate = now + nextInterval * ONE_DAY; 
+      nextDueDate = now + Math.round(nextInterval * ONE_DAY); 
       break;
+    }
   }
+
+  // 1. 引数のカードを更新
   card.interval = nextInterval; 
   card.easeFactor = ease; 
   card.reps = reps; 
   card.dueDate = nextDueDate;
+  card.lastStudied = now;
+  card.consecutiveAgain = consecutiveAgain;
+
+  // 2. デッキ本体の実体カードを直接特定して確実に同期
+  if (currentDeck && Array.isArray(currentDeck.cards)) {
+    const targetInDeck = currentDeck.cards.find(c => c.id === card.id);
+    if (targetInDeck) {
+      targetInDeck.interval = nextInterval;
+      targetInDeck.easeFactor = ease;
+      targetInDeck.reps = reps;
+      targetInDeck.dueDate = nextDueDate;
+      targetInDeck.lastStudied = now;
+      targetInDeck.consecutiveAgain = consecutiveAgain;
+    }
+  }
+
+  // 3. 全デッキ配列のカードも念のため同期
+  decks.forEach(d => {
+    if (d.cards) {
+      const match = d.cards.find(c => c.id === card.id);
+      if (match) {
+        match.interval = nextInterval;
+        match.easeFactor = ease;
+        match.reps = reps;
+        match.dueDate = nextDueDate;
+        match.lastStudied = now;
+        match.consecutiveAgain = consecutiveAgain;
+      }
+    }
+  });
+
   saveDecks();
 }
 
@@ -3019,7 +3147,10 @@ function undoLastAnswer(event) {
   sessionStudiedCount = previousState.sessionCount || 0;
 
   const deckIdx = decks.findIndex(d => d.id === currentDeck.id);
-  if (deckIdx !== -1 && previousState.deckInfo) decks[deckIdx] = previousState.deckInfo;
+  if (deckIdx !== -1 && previousState.deckInfo) {
+    decks[deckIdx] = previousState.deckInfo;
+    currentDeck = decks[deckIdx];
+  }
 
   saveDecks(); saveLogs(); saveDailyHistory(); loadNextCard();
 }
@@ -3048,7 +3179,10 @@ function redoLastAnswer(event) {
   sessionStudiedCount = nextState.sessionCount || 0;
 
   const deckIdx = decks.findIndex(d => d.id === currentDeck.id);
-  if (deckIdx !== -1 && nextState.deckInfo) decks[deckIdx] = nextState.deckInfo;
+  if (deckIdx !== -1 && nextState.deckInfo) {
+    decks[deckIdx] = nextState.deckInfo;
+    currentDeck = decks[deckIdx];
+  }
 
   saveDecks(); saveLogs(); saveDailyHistory(); loadNextCard();
 }
