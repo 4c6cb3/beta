@@ -2470,7 +2470,7 @@ function calculateNextReview(card, rating) {
       card.againStreak += 1; // 連続カウントを追加
       
       // レベルが下がった際、次回「普通」を押した時にレベルが初期化されないよう reps を調整
-      reps = (nextLevel <= 1) ? 0 : Math.max(2, reps);
+      reps = (nextLevel <= 1) ? 1 : Math.max(2, reps);
       
       nextInterval = getIntervalForNumericLevel(nextLevel);
       nextDueDate = now + 1 * ONE_MINUTE; 
@@ -2486,7 +2486,7 @@ function calculateNextReview(card, rating) {
       }
       card.againStreak = 0; // 他の評価を押したので連続カウントをリセット
       
-      reps = (nextLevel <= 1) ? 0 : Math.max(2, reps);
+      reps = (nextLevel <= 1) ? 1 : Math.max(2, reps);
       nextInterval = getIntervalForNumericLevel(nextLevel);
       nextDueDate = now + 12 * ONE_HOUR; 
       ease = Math.max(1.3, ease - 0.15); 
