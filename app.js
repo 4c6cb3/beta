@@ -26,6 +26,7 @@ const defaultDecks = [
         interval: 0,
         easeFactor: 2.5,
         reps: 0,
+        againStreak: 0,
         isHidden: false
       },
       {
@@ -38,6 +39,7 @@ const defaultDecks = [
         interval: 0,
         easeFactor: 2.5,
         reps: 0,
+        againStreak: 0,
         isHidden: false
       }
     ]
@@ -45,11 +47,11 @@ const defaultDecks = [
 ];
 
 const DEFAULT_KEY_BINDS = {
-  advance: ['Space'], 
-  again: ['1'],       
-  hard: ['2'],        
-  good: ['3'],        
-  easy: ['4']         
+  advance: ['Space'],
+  again: ['1'],
+  hard: ['2'],
+  good: ['3'],
+  easy: ['4']
 };
 
 const DEFAULT_USER_CONFIG = {
@@ -195,25 +197,92 @@ const SAMPLE_PREVIEW_Q_PREFIX = '山梨県と静岡県にまたがる、';
  * 3. DOM要素キャッシュ用変数
  * ===================================================================== */
 
-let menuScreen, statsScreen, optionScreen, quizScreen, resultScreen,
-  optLearningScreen, optCustomScreen, optDisplayScreen, optDeckScreen, optDataScreen,
-  addCardModal, editCardModal, cardListModal, deckSettingsModal, tagManagerModal,
-  csvImportModal, csvExportModal, exportDeckSelect, trashModal, trashListContainer, hiddenCardsModal, hiddenCardsListContainer,
-  csvConfirmModal, csvDeckNameInput, csvConfirmCardCount,
-  goalSettingModal, achievementModal,
-  newTagModal, newTagNameInput, newTagColorInput,
-  deckListEl, tagFilterBarEl, csvInput, currentDeckTitleEl, progressInfoEl, questionEl, 
-  answerSectionEl, answerTextEl, explanationTextEl, answerImageContainer, answerImageEl,
-  searchTermTextEl, resultStatsEl, statProgressEl, statTimeEl, buttonsEl,
-  tapHintEl, streakDaysEl, streakMessageEl, calendarTitleEl, calendarGridEl,
-  selectedDayTitleEl, selectedDayCardsEl, selectedDayTimeEl,
-  statTotalTimeEl, statTotalStudiedCardsEl, statTotalNewCardsEl, statTotalStarCardsEl, statPlayedDecksCountEl, statMasteredDecksCountEl,
-  newCardQ, newCardA, newCardExp, editCardQ, editCardA, editCardExp,
-  addCardImgInput, addCardImgPreview, addCardImgElement,
-  editCardImgInput, editCardImgPreview, editCardImgElement,
-  speedOptionGroup, charSpeedRange, speedValueDisplay, previewTextContainer,
-  fontSizeRange, fontSizeValueDisplay, cardListDeckTitle, cardListContainer,
-  cardPaginationEl, deckSettingsTitle, deckTagsCheckboxContainer, deckTagsSettingRow, undoBtn, redoBtn;
+let menuScreen,
+  statsScreen,
+  optionScreen,
+  quizScreen,
+  resultScreen,
+  optLearningScreen,
+  optCustomScreen,
+  optDisplayScreen,
+  optDeckScreen,
+  optDataScreen,
+  addCardModal,
+  editCardModal,
+  cardListModal,
+  deckSettingsModal,
+  tagManagerModal,
+  csvImportModal,
+  csvExportModal,
+  exportDeckSelect,
+  trashModal,
+  trashListContainer,
+  hiddenCardsModal,
+  hiddenCardsListContainer,
+  csvConfirmModal,
+  csvDeckNameInput,
+  csvConfirmCardCount,
+  goalSettingModal,
+  achievementModal,
+  newTagModal,
+  newTagNameInput,
+  newTagColorInput,
+  deckListEl,
+  tagFilterBarEl,
+  csvInput,
+  currentDeckTitleEl,
+  progressInfoEl,
+  questionEl,
+  answerSectionEl,
+  answerTextEl,
+  explanationTextEl,
+  answerImageContainer,
+  answerImageEl,
+  searchTermTextEl,
+  resultStatsEl,
+  statProgressEl,
+  statTimeEl,
+  buttonsEl,
+  tapHintEl,
+  streakDaysEl,
+  streakMessageEl,
+  calendarTitleEl,
+  calendarGridEl,
+  selectedDayTitleEl,
+  selectedDayCardsEl,
+  selectedDayTimeEl,
+  statTotalTimeEl,
+  statTotalStudiedCardsEl,
+  statTotalNewCardsEl,
+  statTotalStarCardsEl,
+  statPlayedDecksCountEl,
+  statMasteredDecksCountEl,
+  newCardQ,
+  newCardA,
+  newCardExp,
+  editCardQ,
+  editCardA,
+  editCardExp,
+  addCardImgInput,
+  addCardImgPreview,
+  addCardImgElement,
+  editCardImgInput,
+  editCardImgPreview,
+  editCardImgElement,
+  speedOptionGroup,
+  charSpeedRange,
+  speedValueDisplay,
+  previewTextContainer,
+  fontSizeRange,
+  fontSizeValueDisplay,
+  cardListDeckTitle,
+  cardListContainer,
+  cardPaginationEl,
+  deckSettingsTitle,
+  deckTagsCheckboxContainer,
+  deckTagsSettingRow,
+  undoBtn,
+  redoBtn;
 
 function initDOMElements() {
   menuScreen = document.getElementById('menu-screen');
@@ -221,13 +290,13 @@ function initDOMElements() {
   optionScreen = document.getElementById('option-screen');
   quizScreen = document.getElementById('quiz-screen');
   resultScreen = document.getElementById('result-screen');
-  
+
   optLearningScreen = document.getElementById('opt-learning-screen');
   optCustomScreen = document.getElementById('opt-custom-screen');
   optDisplayScreen = document.getElementById('opt-display-screen');
   optDeckScreen = document.getElementById('opt-deck-screen');
   optDataScreen = document.getElementById('opt-data-screen');
-  
+
   addCardModal = document.getElementById('add-card-modal');
   editCardModal = document.getElementById('edit-card-modal');
   cardListModal = document.getElementById('card-list-modal');
@@ -244,7 +313,7 @@ function initDOMElements() {
   csvConfirmModal = document.getElementById('csv-confirm-modal');
   csvDeckNameInput = document.getElementById('csv-deck-name-input');
   csvConfirmCardCount = document.getElementById('csv-confirm-card-count');
-  
+
   goalSettingModal = document.getElementById('goal-setting-modal');
   achievementModal = document.getElementById('achievement-modal');
 
@@ -388,9 +457,25 @@ async function idbClear() {
 
 async function migrateLocalStorage() {
   try {
-    const keys = ['memoly_config', 'memoly_decks', 'memoly_trash_decks', 'memoly_logs', 'memoly_daily_history', 'memoly_study_times', 'memoly_user_exp', 'memoly_user_achievements'];
-    const legacyKeys = ['aoki_config', 'aoki_decks', 'aoki_trash_decks', 'aoki_logs', 'aoki_daily_history', 'aoki_study_times'];
-    
+    const keys = [
+      'memoly_config',
+      'memoly_decks',
+      'memoly_trash_decks',
+      'memoly_logs',
+      'memoly_daily_history',
+      'memoly_study_times',
+      'memoly_user_exp',
+      'memoly_user_achievements'
+    ];
+    const legacyKeys = [
+      'aoki_config',
+      'aoki_decks',
+      'aoki_trash_decks',
+      'aoki_logs',
+      'aoki_daily_history',
+      'aoki_study_times'
+    ];
+
     for (let i = 0; i < keys.length; i++) {
       let data = await idbGet(keys[i]);
       if (!data) {
@@ -400,22 +485,34 @@ async function migrateLocalStorage() {
             data = JSON.parse(localData);
             await idbSet(keys[i], data);
             if (legacyKeys[i]) localStorage.removeItem(legacyKeys[i]);
-          } catch(e) {}
+          } catch (e) {}
         }
       }
     }
-  } catch(e) {}
+  } catch (e) {}
 }
 
-function saveDecks() { idbSet('memoly_decks', decks).catch(e => console.error(e)); }
-function saveConfig() { idbSet('memoly_config', userConfig).catch(e => console.error(e)); }
-function saveLogs() { idbSet('memoly_logs', studyLogs).catch(e => console.error(e)); }
-function saveDailyHistory() { idbSet('memoly_daily_history', dailyStudyHistory).catch(e => console.error(e)); }
-function saveTrashDecks() { idbSet('memoly_trash_decks', trashDecks).catch(e => console.error(e)); }
-function saveStudyTimes() { idbSet('memoly_study_times', studyTimes).catch(e => console.error(e)); }
+function saveDecks() {
+  idbSet('memoly_decks', decks).catch((e) => console.error(e));
+}
+function saveConfig() {
+  idbSet('memoly_config', userConfig).catch((e) => console.error(e));
+}
+function saveLogs() {
+  idbSet('memoly_logs', studyLogs).catch((e) => console.error(e));
+}
+function saveDailyHistory() {
+  idbSet('memoly_daily_history', dailyStudyHistory).catch((e) => console.error(e));
+}
+function saveTrashDecks() {
+  idbSet('memoly_trash_decks', trashDecks).catch((e) => console.error(e));
+}
+function saveStudyTimes() {
+  idbSet('memoly_study_times', studyTimes).catch((e) => console.error(e));
+}
 function saveGamificationData() {
-  idbSet('memoly_user_exp', userExp).catch(e => console.error(e));
-  idbSet('memoly_user_achievements', userAchievements).catch(e => console.error(e));
+  idbSet('memoly_user_exp', userExp).catch((e) => console.error(e));
+  idbSet('memoly_user_achievements', userAchievements).catch((e) => console.error(e));
 }
 
 /* =====================================================================
@@ -486,7 +583,7 @@ function formatDurationMinutes(seconds) {
 
 function checkDeckNameDuplicate(title, excludeDeckId = null) {
   const trimmed = title.trim();
-  const exists = decks.some(d => d.title.trim() === trimmed && d.id !== excludeDeckId);
+  const exists = decks.some((d) => d.title.trim() === trimmed && d.id !== excludeDeckId);
   if (exists) {
     return confirm(`「${trimmed}」という名前は既にほかのデッキで使われていますが、本当にその名前でよろしいですか？`);
   }
@@ -496,14 +593,14 @@ function checkDeckNameDuplicate(title, excludeDeckId = null) {
 async function exportAllDataBackup() {
   try {
     const data = {
-      decks: await idbGet('memoly_decks') || decks,
-      trashDecks: await idbGet('memoly_trash_decks') || trashDecks,
-      studyLogs: await idbGet('memoly_logs') || studyLogs,
-      dailyStudyHistory: await idbGet('memoly_daily_history') || dailyStudyHistory,
-      studyTimes: await idbGet('memoly_study_times') || studyTimes,
-      userConfig: await idbGet('memoly_config') || userConfig,
-      userExp: await idbGet('memoly_user_exp') || userExp,
-      userAchievements: await idbGet('memoly_user_achievements') || userAchievements
+      decks: (await idbGet('memoly_decks')) || decks,
+      trashDecks: (await idbGet('memoly_trash_decks')) || trashDecks,
+      studyLogs: (await idbGet('memoly_logs')) || studyLogs,
+      dailyStudyHistory: (await idbGet('memoly_daily_history')) || dailyStudyHistory,
+      studyTimes: (await idbGet('memoly_study_times')) || studyTimes,
+      userConfig: (await idbGet('memoly_config')) || userConfig,
+      userExp: (await idbGet('memoly_user_exp')) || userExp,
+      userAchievements: (await idbGet('memoly_user_achievements')) || userAchievements
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -523,13 +620,13 @@ async function exportAllDataBackup() {
 async function importAllDataBackup(event) {
   const file = event.target.files[0];
   if (!file) return;
-  
+
   const reader = new FileReader();
   reader.onload = async (e) => {
     try {
       const data = JSON.parse(e.target.result);
       if (!data.decks) throw new Error('有効なバックアップデータではありません。');
-      
+
       if (confirm('現在の端末内データがすべて上書きされます。よろしいですか？')) {
         await idbSet('memoly_decks', data.decks);
         await idbSet('memoly_trash_decks', data.trashDecks || []);
@@ -539,7 +636,7 @@ async function importAllDataBackup(event) {
         await idbSet('memoly_config', data.userConfig || userConfig);
         await idbSet('memoly_user_exp', data.userExp || 0);
         await idbSet('memoly_user_achievements', data.userAchievements || {});
-        
+
         alert('データを完全に復元しました。アプリをリロードします。');
         window.location.reload();
       }
@@ -554,7 +651,7 @@ async function importAllDataBackup(event) {
 function openCsvExportModal() {
   if (!exportDeckSelect || !csvExportModal) return;
   exportDeckSelect.innerHTML = '<option value="ALL">すべてのデッキ</option>';
-  decks.forEach(deck => {
+  decks.forEach((deck) => {
     const opt = document.createElement('option');
     opt.value = deck.id;
     opt.textContent = deck.title;
@@ -577,7 +674,7 @@ function submitCsvExport() {
     targetDecks = decks;
     exportFileName = `memoly_alldecks_${getFormattedDate(new Date())}.csv`;
   } else {
-    const deck = decks.find(d => d.id === selectedValue);
+    const deck = decks.find((d) => d.id === selectedValue);
     if (deck) {
       targetDecks = [deck];
       exportFileName = `memoly_${deck.title}_${getFormattedDate(new Date())}.csv`;
@@ -591,8 +688,8 @@ function submitCsvExport() {
   }
 
   const csvRows = [];
-  targetDecks.forEach(deck => {
-    (deck.cards || []).forEach(card => {
+  targetDecks.forEach((deck) => {
+    (deck.cards || []).forEach((card) => {
       const escapeCsv = (str) => {
         if (str === null || str === undefined) return '';
         let escaped = str.toString().replace(/"/g, '""');
@@ -609,7 +706,7 @@ function submitCsvExport() {
     return;
   }
 
-  const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+  const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
   const blob = new Blob([bom, csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -630,21 +727,29 @@ function resizeImage(file, maxWidth = 600, maxHeight = 600, quality = 0.7) {
       const img = new Image();
       img.src = e.target.result;
       img.onload = () => {
-        let width = img.width, height = img.height;
+        let width = img.width,
+          height = img.height;
         if (width > height) {
-          if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
         } else {
-          if (height > maxHeight) { width = Math.round((width * maxHeight) / height); height = maxHeight; }
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
         }
         const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
-      img.onerror = err => reject(err);
+      img.onerror = (err) => reject(err);
     };
-    reader.onerror = err => reject(err);
+    reader.onerror = (err) => reject(err);
   });
 }
 
@@ -663,14 +768,27 @@ function removeEditCardImage() {
 }
 
 function setupImageDropZone(dropZoneId, inputId, onImageLoaded) {
-  const dropZone = document.getElementById('drop-zone');
+  const dropZone = document.getElementById(dropZoneId);
   const input = document.getElementById(inputId);
   if (!dropZone || !input) return;
 
   dropZone.addEventListener('click', () => input.click());
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); }, false));
-  ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.add('dragover'), false));
-  ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover'), false));
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((ev) =>
+    dropZone.addEventListener(
+      ev,
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      false
+    )
+  );
+  ['dragenter', 'dragover'].forEach((ev) =>
+    dropZone.addEventListener(ev, () => dropZone.classList.add('dragover'), false)
+  );
+  ['dragleave', 'drop'].forEach((ev) =>
+    dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover'), false)
+  );
 
   dropZone.addEventListener('drop', (e) => {
     const files = e.dataTransfer.files;
@@ -681,11 +799,16 @@ function setupImageDropZone(dropZoneId, inputId, onImageLoaded) {
   });
 
   async function handleImageFile(file) {
-    if (!file.type.startsWith('image/')) { alert('画像ファイルを選択してください。'); return; }
+    if (!file.type.startsWith('image/')) {
+      alert('画像ファイルを選択してください。');
+      return;
+    }
     try {
       const dataUrl = await resizeImage(file, 600, 600, 0.7);
       onImageLoaded(dataUrl);
-    } catch (err) { alert('画像の処理に失敗しました。'); }
+    } catch (err) {
+      alert('画像の処理に失敗しました。');
+    }
   }
 }
 
@@ -719,19 +842,20 @@ async function initApp() {
     const savedDecks = await idbGet('memoly_decks');
     if (Array.isArray(savedDecks) && savedDecks.length > 0) {
       decks = savedDecks;
-      decks.forEach(d => {
+      decks.forEach((d) => {
         if (!Array.isArray(d.tags)) d.tags = [];
         if (!d.orderMode) d.orderMode = 'SHUFFLE';
         if (d.excludeStar === undefined) d.excludeStar = false;
         if (!d.lastStudied) d.lastStudied = 0;
         if (!Array.isArray(d.cards)) d.cards = [];
-        d.cards.forEach(c => {
+        d.cards.forEach((c) => {
           if (c.isHidden === undefined) c.isHidden = false;
+          if (c.againStreak === undefined) c.againStreak = 0; // againStreak初期化
         });
       });
-    } else { 
-      decks = JSON.parse(JSON.stringify(defaultDecks)); 
-      await idbSet('memoly_decks', decks); 
+    } else {
+      decks = JSON.parse(JSON.stringify(defaultDecks));
+      await idbSet('memoly_decks', decks);
     }
 
     const savedTrash = await idbGet('memoly_trash_decks');
@@ -762,14 +886,14 @@ async function initApp() {
 
     setupImageDropZone('add-card-img-drop-zone', 'add-card-img-input', (dataUrl) => {
       currentAddingImageData = dataUrl;
-      if(addCardImgElement) addCardImgElement.src = dataUrl;
-      if(addCardImgPreview) addCardImgPreview.classList.remove('hidden');
+      if (addCardImgElement) addCardImgElement.src = dataUrl;
+      if (addCardImgPreview) addCardImgPreview.classList.remove('hidden');
     });
 
     setupImageDropZone('edit-card-img-drop-zone', 'edit-card-img-input', (dataUrl) => {
       currentEditingImageData = dataUrl;
-      if(editCardImgElement) editCardImgElement.src = dataUrl;
-      if(editCardImgPreview) editCardImgPreview.classList.remove('hidden');
+      if (editCardImgElement) editCardImgElement.src = dataUrl;
+      if (editCardImgPreview) editCardImgPreview.classList.remove('hidden');
     });
 
     selectedCalendarDateStr = getFormattedDate(new Date());
@@ -806,7 +930,9 @@ function recordStudyLog(card, rating) {
     dailyStudyHistory[todayStr][card.id] = {
       card: { question: card.question, answer: card.answer },
       deckTitle: currentDeck ? currentDeck.title : '',
-      againCount: 0, totalCount: 0, lastStudiedTime: Date.now()
+      againCount: 0,
+      totalCount: 0,
+      lastStudiedTime: Date.now()
     };
   }
   dailyStudyHistory[todayStr][card.id].lastStudiedTime = Date.now();
@@ -845,7 +971,8 @@ function applyConfigUI() {
   const modeDescEl = document.getElementById('mode-description-text');
   if (modeDescEl) {
     if (userConfig.mode === 'NORMAL') modeDescEl.textContent = '問題文全表示の単語帳のようなモード。';
-    else if (userConfig.mode === 'FAST') modeDescEl.textContent = '問題文が1文字ずつ表示されるモード。早押しクイズの形式を再現。';
+    else if (userConfig.mode === 'FAST')
+      modeDescEl.textContent = '問題文が1文字ずつ表示されるモード。早押しクイズの形式を再現。';
   }
 
   const sortRadio = document.querySelector(`input[name="sort-option"][value="${userConfig.deckSortOrder}"]`);
@@ -856,19 +983,20 @@ function applyConfigUI() {
 
   const speedDisabledNotice = document.getElementById('speed-disabled-notice');
   if (speedOptionGroup) {
-    const isFastMode = (userConfig.mode === 'FAST');
+    const isFastMode = userConfig.mode === 'FAST';
     if (charSpeedRange) charSpeedRange.disabled = !isFastMode;
     speedOptionGroup.style.opacity = isFastMode ? '1' : '0.4';
     speedOptionGroup.style.pointerEvents = isFastMode ? 'auto' : 'none';
     if (speedDisabledNotice) speedDisabledNotice.style.display = isFastMode ? 'none' : 'block';
-    if (isFastMode) startPreviewTyping(); else clearInterval(previewTimer);
+    if (isFastMode) startPreviewTyping();
+    else clearInterval(previewTimer);
   }
 
   const cbLongPress = document.getElementById('toggle-long-press');
   if (cbLongPress) cbLongPress.checked = userConfig.enableLongPress;
 
   const isLongPressGlobalEnabled = userConfig.enableLongPress;
-  const isNormalMode = (userConfig.mode === 'NORMAL');
+  const isNormalMode = userConfig.mode === 'NORMAL';
 
   const holdQGroup = document.getElementById('hold-q-group');
   const rangeHoldSpeedQ = document.getElementById('hold-speed-q-range');
@@ -949,18 +1077,18 @@ function applyConfigUI() {
  * ===================================================================== */
 
 function hideAllScreens() {
-  clearInterval(timer); 
+  clearInterval(timer);
   clearInterval(previewTimer);
-  clearTimeout(holdTimer); 
+  clearTimeout(holdTimer);
   clearInterval(holdInterval);
   stopQuizStudyTimer();
-  
+
   if (menuScreen) menuScreen.classList.add('hidden');
   if (statsScreen) statsScreen.classList.add('hidden');
   if (optionScreen) optionScreen.classList.add('hidden');
   if (quizScreen) quizScreen.classList.add('hidden');
   if (resultScreen) resultScreen.classList.add('hidden');
-  
+
   if (optLearningScreen) optLearningScreen.classList.add('hidden');
   if (optCustomScreen) optCustomScreen.classList.add('hidden');
   if (optDisplayScreen) optDisplayScreen.classList.add('hidden');
@@ -978,7 +1106,7 @@ function showMenu() {
 function showStats() {
   hideAllScreens();
   if (statsScreen) statsScreen.classList.remove('hidden');
-  switchStatsTab('daily'); 
+  switchStatsTab('daily');
   renderStatsScreen();
 }
 
@@ -991,8 +1119,12 @@ function switchStatsTab(tabName) {
   const tabCards = document.getElementById('stats-tab-cards');
   const tabAch = document.getElementById('stats-tab-achievements');
 
-  [btnDaily, btnCards, btnAch].forEach(b => { if (b) b.classList.remove('active'); });
-  [tabDaily, tabCards, tabAch].forEach(t => { if (t) t.classList.add('hidden'); });
+  [btnDaily, btnCards, btnAch].forEach((b) => {
+    if (b) b.classList.remove('active');
+  });
+  [tabDaily, tabCards, tabAch].forEach((t) => {
+    if (t) t.classList.add('hidden');
+  });
 
   if (tabName === 'daily') {
     if (btnDaily) btnDaily.classList.add('active');
@@ -1008,7 +1140,7 @@ function switchStatsTab(tabName) {
 }
 
 function showOption() {
-  hideAllScreens(); 
+  hideAllScreens();
   tempFontSize = userConfig.fontSize;
   if (optionScreen) optionScreen.classList.remove('hidden');
 }
@@ -1017,7 +1149,7 @@ function showOptScreen(screenId) {
   hideAllScreens();
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) targetScreen.classList.remove('hidden');
-  
+
   applyConfigUI();
   if (screenId === 'opt-learning-screen') {
     if (userConfig.mode === 'FAST') startPreviewTyping();
@@ -1030,7 +1162,7 @@ function showOptScreen(screenId) {
  * ===================================================================== */
 
 function calculateStreak() {
-  let streak = 0; 
+  let streak = 0;
   let checkDate = new Date();
   const todayStr = getFormattedDate(checkDate);
   let hasToday = !!(studyLogs[todayStr] && studyLogs[todayStr] > 0);
@@ -1038,7 +1170,7 @@ function calculateStreak() {
   while (true) {
     const dateStr = getFormattedDate(checkDate);
     if (studyLogs[dateStr] && studyLogs[dateStr] > 0) {
-      streak++; 
+      streak++;
       checkDate.setDate(checkDate.getDate() - 1);
     } else break;
   }
@@ -1060,7 +1192,7 @@ function renderStatsScreen() {
   if (streakDaysEl) streakDaysEl.textContent = streak;
   if (streakMessageEl) streakMessageEl.textContent = getEncouragementMessage(streak);
   updateStatsDeckSelect();
-  renderCalendar(); 
+  renderCalendar();
   renderSelectedDayDetail();
   renderAllTimeStats();
   renderTodayStudiedList();
@@ -1071,27 +1203,34 @@ function updateStatsDeckSelect() {
   if (!deckSelect) return;
   const currentValue = deckSelect.value;
   deckSelect.innerHTML = '<option value="ALL_DECKS">すべてのデッキ</option>';
-  
+
   const deckNames = new Set();
-  decks.forEach(d => { if (d.title) deckNames.add(d.title); });
-  
-  Object.keys(dailyStudyHistory).forEach(dateKey => {
+  decks.forEach((d) => {
+    if (d.title) deckNames.add(d.title);
+  });
+
+  Object.keys(dailyStudyHistory).forEach((dateKey) => {
     const dayData = dailyStudyHistory[dateKey];
     if (dayData) {
-      Object.values(dayData).forEach(item => { if (item.deckTitle) deckNames.add(item.deckTitle); });
+      Object.values(dayData).forEach((item) => {
+        if (item.deckTitle) deckNames.add(item.deckTitle);
+      });
     }
   });
-  
-  Array.from(deckNames).sort().forEach(name => {
-    const opt = document.createElement('option');
-    opt.value = name; opt.textContent = name;
-    deckSelect.appendChild(opt);
-  });
+
+  Array.from(deckNames)
+    .sort()
+    .forEach((name) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      deckSelect.appendChild(opt);
+    });
   deckSelect.value = Array.from(deckNames).includes(currentValue) ? currentValue : 'ALL_DECKS';
 }
 
 function changeCalendarMonth(delta) {
-  currentCalendarDate.setDate(1); 
+  currentCalendarDate.setDate(1);
   currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
   renderCalendar();
 }
@@ -1103,9 +1242,9 @@ function renderCalendar() {
   calendarTitleEl.textContent = `${year}年 ${month + 1}月`;
   calendarGridEl.innerHTML = '';
 
-  ['日', '月', '火', '水', '木', '金', '土'].forEach(d => {
-    const dh = document.createElement('div'); 
-    dh.className = 'calendar-day-header'; 
+  ['日', '月', '火', '水', '木', '金', '土'].forEach((d) => {
+    const dh = document.createElement('div');
+    dh.className = 'calendar-day-header';
     dh.textContent = d;
     calendarGridEl.appendChild(dh);
   });
@@ -1117,7 +1256,7 @@ function renderCalendar() {
   if (!selectedCalendarDateStr) selectedCalendarDateStr = todayStr;
 
   for (let i = 0; i < firstDay; i++) {
-    const emptyCell = document.createElement('div'); 
+    const emptyCell = document.createElement('div');
     emptyCell.className = 'calendar-cell empty';
     calendarGridEl.appendChild(emptyCell);
   }
@@ -1132,7 +1271,7 @@ function renderCalendar() {
     if (count > 0) cellClass += ' has-data';
     if (dateStr === todayStr) cellClass += ' today';
     if (dateStr === selectedCalendarDateStr) cellClass += ' selected';
-    
+
     cell.className = cellClass;
     cell.innerHTML = `<span class="day-num">${day}</span>${count > 0 ? `<span class="day-count">${count}枚</span>` : ''}`;
     cell.onclick = () => selectCalendarDay(dateStr);
@@ -1149,10 +1288,12 @@ function selectCalendarDay(dateStr) {
 function renderSelectedDayDetail() {
   if (!selectedDayTitleEl || !selectedDayCardsEl || !selectedDayTimeEl) return;
   const todayStr = getFormattedDate(new Date());
-  const isToday = (selectedCalendarDateStr === todayStr);
+  const isToday = selectedCalendarDateStr === todayStr;
   const parts = selectedCalendarDateStr.split('-');
-  
-  selectedDayTitleEl.textContent = isToday ? '本日の学習記録' : `${parseInt(parts[0], 10)}年${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日の学習記録`;
+
+  selectedDayTitleEl.textContent = isToday
+    ? '本日の学習記録'
+    : `${parseInt(parts[0], 10)}年${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日の学習記録`;
   selectedDayCardsEl.textContent = studyLogs[selectedCalendarDateStr] || 0;
   selectedDayTimeEl.textContent = formatDurationMinutes(studyTimes[selectedCalendarDateStr] || 0);
 }
@@ -1160,21 +1301,28 @@ function renderSelectedDayDetail() {
 function renderAllTimeStats() {
   if (!statTotalTimeEl) return;
   let totalSeconds = 0;
-  Object.values(studyTimes).forEach(sec => { totalSeconds += (sec || 0); });
+  Object.values(studyTimes).forEach((sec) => {
+    totalSeconds += sec || 0;
+  });
   statTotalTimeEl.textContent = formatDurationMinutes(totalSeconds);
 
   let totalStudied = 0;
-  Object.values(studyLogs).forEach(cnt => { totalStudied += (cnt || 0); });
+  Object.values(studyLogs).forEach((cnt) => {
+    totalStudied += cnt || 0;
+  });
   if (statTotalStudiedCardsEl) statTotalStudiedCardsEl.textContent = `${totalStudied}枚`;
 
-  let totalNewCards = 0, totalStarCards = 0, playedDecksCount = 0, masteredDecksCount = 0;
+  let totalNewCards = 0,
+    totalStarCards = 0,
+    playedDecksCount = 0,
+    masteredDecksCount = 0;
 
-  decks.forEach(deck => {
-    const activeCards = (deck.cards || []).filter(c => !c.isHidden);
-    let deckHasPlayed = (deck.lastStudied && deck.lastStudied > 0);
-    let deckAllStar = (activeCards.length > 0);
+  decks.forEach((deck) => {
+    const activeCards = (deck.cards || []).filter((c) => !c.isHidden);
+    let deckHasPlayed = deck.lastStudied && deck.lastStudied > 0;
+    let deckAllStar = activeCards.length > 0;
 
-    activeCards.forEach(card => {
+    activeCards.forEach((card) => {
       if ((card.reps && card.reps > 0) || (card.dueDate && card.dueDate > 0)) {
         totalNewCards++;
         deckHasPlayed = true;
@@ -1193,28 +1341,56 @@ function renderAllTimeStats() {
   if (statMasteredDecksCountEl) statMasteredDecksCountEl.textContent = `${masteredDecksCount}`;
 }
 
-function changeTodayCardsSortOrder(order) { 
-  todayCardsSortOrder = order; 
-  renderTodayStudiedList(); 
+function changeTodayCardsSortOrder(order) {
+  todayCardsSortOrder = order;
+  renderTodayStudiedList();
 }
 
 function getCardLevelInfo(card) {
   if (!card) return { level: 0, score: 0, color: '#9ca3af' };
-  let level = 1, score = 0;
-  const val = card.interval || 0, reps = card.reps || 0, dueDate = card.dueDate || 0;
+  let level = 1,
+    score = 0;
+  const val = card.interval || 0,
+    reps = card.reps || 0,
+    dueDate = card.dueDate || 0;
 
-  if (val === 0 && reps === 0 && dueDate === 0) { level = 0; score = 0; }
-  else if (val >= 30) { level = '★'; score = 1.0; }
-  else if (val >= 21) { level = 10; score = 0.8; }
-  else if (val >= 14) { level = 9; score = 0.6; }
-  else if (val >= 10) { level = 8; score = 0.6; }
-  else if (val >= 7)  { level = 7; score = 0.4; }
-  else if (val >= 5)  { level = 6; score = 0.4; }
-  else if (val >= 3)  { level = 5; score = 0.4; }
-  else if (val >= 2)  { level = 4; score = 0.2; }
-  else if (val >= 1)  { level = 3; score = 0.2; }
-  else if (val >= 0.5){ level = 2; score = 0; }
-  else { level = 1; score = 0; }
+  if (val === 0 && reps === 0 && dueDate === 0) {
+    level = 0;
+    score = 0;
+  } else if (val >= 30) {
+    level = '★';
+    score = 1.0;
+  } else if (val >= 21) {
+    level = 10;
+    score = 0.8;
+  } else if (val >= 14) {
+    level = 9;
+    score = 0.6;
+  } else if (val >= 10) {
+    level = 8;
+    score = 0.6;
+  } else if (val >= 7) {
+    level = 7;
+    score = 0.4;
+  } else if (val >= 5) {
+    level = 6;
+    score = 0.4;
+  } else if (val >= 3) {
+    level = 5;
+    score = 0.4;
+  } else if (val >= 2) {
+    level = 4;
+    score = 0.2;
+  } else if (val >= 1) {
+    level = 3;
+    score = 0.2;
+  } else if (val >= 0.5) {
+    level = 2;
+    score = 0;
+  } else {
+    level = 1;
+    score = 0;
+  }
 
   let bg = '#9ca3af';
   if (level === '★') bg = '#8b5cf6';
@@ -1235,31 +1411,37 @@ function renderTodayStudiedList() {
 
   let studiedCards = [];
   const allCardsMap = {};
-  decks.forEach(deck => { (deck.cards || []).forEach(c => { allCardsMap[c.id] = c; }); });
+  decks.forEach((deck) => {
+    (deck.cards || []).forEach((c) => {
+      allCardsMap[c.id] = c;
+    });
+  });
 
   if (range === 'TODAY') {
     const todayStr = getFormattedDate(new Date());
     const todayData = dailyStudyHistory[todayStr];
     if (todayData) {
-      studiedCards = Object.keys(todayData).map(cardId => ({ id: cardId, ...todayData[cardId] }));
+      studiedCards = Object.keys(todayData).map((cardId) => ({ id: cardId, ...todayData[cardId] }));
     }
   } else {
     const merged = {};
-    Object.keys(dailyStudyHistory).forEach(dateKey => {
+    Object.keys(dailyStudyHistory).forEach((dateKey) => {
       const dayData = dailyStudyHistory[dateKey];
       if (dayData) {
-        Object.keys(dayData).forEach(cardId => {
+        Object.keys(dayData).forEach((cardId) => {
           const item = dayData[cardId];
           if (!merged[cardId]) {
             merged[cardId] = {
               id: cardId,
               card: { question: item.card.question, answer: item.card.answer },
               deckTitle: item.deckTitle,
-              againCount: 0, totalCount: 0, lastStudiedTime: 0
+              againCount: 0,
+              totalCount: 0,
+              lastStudiedTime: 0
             };
           }
-          merged[cardId].againCount += (item.againCount || 0);
-          merged[cardId].totalCount += (item.totalCount || 0);
+          merged[cardId].againCount += item.againCount || 0;
+          merged[cardId].totalCount += item.totalCount || 0;
           if (item.lastStudiedTime > merged[cardId].lastStudiedTime) {
             merged[cardId].lastStudiedTime = item.lastStudiedTime;
             if (item.deckTitle) merged[cardId].deckTitle = item.deckTitle;
@@ -1271,7 +1453,7 @@ function renderTodayStudiedList() {
   }
 
   if (targetDeckTitle !== 'ALL_DECKS') {
-    studiedCards = studiedCards.filter(item => item.deckTitle === targetDeckTitle);
+    studiedCards = studiedCards.filter((item) => item.deckTitle === targetDeckTitle);
   }
 
   if (studiedCards.length === 0) {
@@ -1285,7 +1467,7 @@ function renderTodayStudiedList() {
     studiedCards.sort((a, b) => (b.lastStudiedTime || 0) - (a.lastStudiedTime || 0));
   }
 
-  studiedCards.forEach(item => {
+  studiedCards.forEach((item) => {
     const realCard = allCardsMap[item.id];
     let levelBadgeHtml = '';
     if (realCard && userConfig.enableCardLevel) {
@@ -1293,7 +1475,7 @@ function renderTodayStudiedList() {
       levelBadgeHtml = `<div style="background-color: ${lvInfo.color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.9em; font-weight: bold;">Lv.${lvInfo.level}</div>`;
     }
 
-    const itemEl = document.createElement('div'); 
+    const itemEl = document.createElement('div');
     itemEl.className = 'card-item';
     itemEl.innerHTML = `
       <div class="card-item-info">
@@ -1332,7 +1514,8 @@ function getRankTitle(lv) {
 }
 
 function updateUserLevelFromExp() {
-  let lv = 1, accumulated = 0;
+  let lv = 1,
+    accumulated = 0;
   while (true) {
     const req = getExpRequiredForLevel(lv);
     if (userExp >= accumulated + req) {
@@ -1341,7 +1524,11 @@ function updateUserLevelFromExp() {
     } else break;
   }
   userLevel = lv;
-  return { level: userLevel, currentExpInLevel: userExp - accumulated, nextLevelReq: getExpRequiredForLevel(userLevel) };
+  return {
+    level: userLevel,
+    currentExpInLevel: userExp - accumulated,
+    nextLevelReq: getExpRequiredForLevel(userLevel)
+  };
 }
 
 function addExpForRating(rating) {
@@ -1364,7 +1551,7 @@ function triggerAchievement(achievementId) {
   if (!userAchievements[achievementId]) {
     userAchievements[achievementId] = Date.now();
     saveGamificationData();
-    const ach = ACHIEVEMENTS_PRESET.find(a => a.id === achievementId);
+    const ach = ACHIEVEMENTS_PRESET.find((a) => a.id === achievementId);
     if (ach) {
       pendingAchievementAlerts.push(ach);
       const menuEl = document.getElementById('menu-screen');
@@ -1411,15 +1598,21 @@ function checkPendingAchievementPopup() {
 function checkRetroactiveAchievements() {
   if (!userConfig.enableGamification) return;
   let totalStudied = 0;
-  Object.values(studyLogs).forEach(cnt => { totalStudied += (cnt || 0); });
+  Object.values(studyLogs).forEach((cnt) => {
+    totalStudied += cnt || 0;
+  });
 
   let totalStars = 0;
-  decks.forEach(d => {
-    (d.cards || []).forEach(c => { if (c.interval >= 30) totalStars++; });
+  decks.forEach((d) => {
+    (d.cards || []).forEach((c) => {
+      if (c.interval >= 30) totalStars++;
+    });
   });
 
   let totalSeconds = 0;
-  Object.values(studyTimes).forEach(sec => { totalSeconds += (sec || 0); });
+  Object.values(studyTimes).forEach((sec) => {
+    totalSeconds += sec || 0;
+  });
   const streak = calculateStreak();
 
   if (totalStudied >= 1) triggerAchievement('first_step');
@@ -1455,7 +1648,9 @@ function checkRetroactiveAchievements() {
 
 function checkCardStudyAchievements() {
   let totalStudied = 0;
-  Object.values(studyLogs).forEach(cnt => { totalStudied += (cnt || 0); });
+  Object.values(studyLogs).forEach((cnt) => {
+    totalStudied += cnt || 0;
+  });
 
   if (totalStudied >= 1) triggerAchievement('first_step');
   if (totalStudied >= 10) triggerAchievement('cards_10');
@@ -1474,7 +1669,11 @@ function checkCardStudyAchievements() {
   if (hour >= 21 && hour <= 23) triggerAchievement('night_quiz');
 
   let totalStars = 0;
-  decks.forEach(d => { (d.cards || []).forEach(c => { if (c.interval >= 30) totalStars++; }); });
+  decks.forEach((d) => {
+    (d.cards || []).forEach((c) => {
+      if (c.interval >= 30) totalStars++;
+    });
+  });
   if (totalStars >= 1) triggerAchievement('first_star');
   if (totalStars >= 10) triggerAchievement('stars_10');
   if (totalStars >= 50) triggerAchievement('stars_50');
@@ -1486,7 +1685,9 @@ function checkCardStudyAchievements() {
 
 function checkTimeAchievements() {
   let totalSeconds = 0;
-  Object.values(studyTimes).forEach(sec => { totalSeconds += (sec || 0); });
+  Object.values(studyTimes).forEach((sec) => {
+    totalSeconds += sec || 0;
+  });
   if (totalSeconds >= 1800) triggerAchievement('time_30m');
   if (totalSeconds >= 18000) triggerAchievement('time_5h');
   if (totalSeconds >= 72000) triggerAchievement('time_20h');
@@ -1534,7 +1735,9 @@ function renderAchievementsTab() {
   if (totalExpEl) totalExpEl.textContent = userExp.toLocaleString();
 
   let totalStudied = 0;
-  Object.values(studyLogs).forEach(cnt => { totalStudied += (cnt || 0); });
+  Object.values(studyLogs).forEach((cnt) => {
+    totalStudied += cnt || 0;
+  });
   if (totalCardsEl) totalCardsEl.textContent = totalStudied.toLocaleString();
 
   renderDailyGoalProgress();
@@ -1586,7 +1789,7 @@ function renderAchievementsGrid() {
   grid.innerHTML = '';
 
   let unlockedCount = 0;
-  ACHIEVEMENTS_PRESET.forEach(ach => {
+  ACHIEVEMENTS_PRESET.forEach((ach) => {
     const isUnlocked = !!userAchievements[ach.id];
     if (isUnlocked) unlockedCount++;
 
@@ -1642,7 +1845,11 @@ function submitGoalSetting() {
  * 11. 設定ハンドラ
  * ===================================================================== */
 
-function changeTheme(theme) { userConfig.theme = theme; saveConfig(); applyConfigUI(); }
+function changeTheme(theme) {
+  userConfig.theme = theme;
+  saveConfig();
+  applyConfigUI();
+}
 
 function updateFontSizePreview(size) {
   tempFontSize = parseInt(size, 10);
@@ -1651,35 +1858,35 @@ function updateFontSizePreview(size) {
 }
 
 function applyAndSaveFontSize() {
-  userConfig.fontSize = tempFontSize; 
-  saveConfig(); 
+  userConfig.fontSize = tempFontSize;
+  saveConfig();
   applyConfigUI();
   alert('文字サイズの設定をアプリ全体に保存・反映しました。');
 }
 
 function changeMode(mode) {
-  userConfig.mode = mode; 
-  saveConfig(); 
+  userConfig.mode = mode;
+  saveConfig();
   applyConfigUI();
   if (mode === 'FAST') startPreviewTyping();
 }
 
-function changeDeckSortOrder(order) { 
-  userConfig.deckSortOrder = order; 
-  saveConfig(); 
-  applyConfigUI(); 
+function changeDeckSortOrder(order) {
+  userConfig.deckSortOrder = order;
+  saveConfig();
+  applyConfigUI();
 }
 
 function updateCharSpeed(speed) {
   userConfig.charSpeed = parseInt(speed, 10);
   if (speedValueDisplay) speedValueDisplay.textContent = userConfig.charSpeed;
-  saveConfig(); 
+  saveConfig();
   startPreviewTyping();
 }
 
-function toggleLongPressOption(enabled) { 
-  userConfig.enableLongPress = enabled; 
-  saveConfig(); 
+function toggleLongPressOption(enabled) {
+  userConfig.enableLongPress = enabled;
+  saveConfig();
   applyConfigUI();
 }
 
@@ -1697,7 +1904,10 @@ function updateHoldSpeedA(val) {
   saveConfig();
 }
 
-function toggleCardLevelOption(enabled) { userConfig.enableCardLevel = enabled; saveConfig(); }
+function toggleCardLevelOption(enabled) {
+  userConfig.enableCardLevel = enabled;
+  saveConfig();
+}
 
 function toggleReviewResultOption(enabled) {
   userConfig.enableReviewResult = enabled;
@@ -1734,11 +1944,11 @@ function startPreviewTyping() {
   clearInterval(previewTimer);
   if (!previewTextContainer) return;
   previewTextContainer.textContent = '';
-  let pIndex = 0; 
+  let pIndex = 0;
   const chars = [...SAMPLE_PREVIEW_TEXT];
   previewTimer = setInterval(() => {
     if (pIndex < chars.length) {
-      previewTextContainer.textContent += chars[pIndex]; 
+      previewTextContainer.textContent += chars[pIndex];
       pIndex++;
     } else clearInterval(previewTimer);
   }, userConfig.charSpeed);
@@ -1747,10 +1957,20 @@ function startPreviewTyping() {
 function resetOptHoldPreview() {
   const qTextContainer = document.getElementById('hold-preview-q-text-container');
   const aTextContainer = document.getElementById('hold-preview-a-text-container');
-  clearTimeout(optHoldTimerQ); clearInterval(optHoldIntervalQ); isOptHoldingQ = false;
-  clearTimeout(optHoldTimerA); clearInterval(optHoldIntervalA); isOptHoldingA = false;
-  if (qTextContainer) { qTextContainer.textContent = SAMPLE_PREVIEW_Q_PREFIX; optHoldCharIndexQ = 0; }
-  if (aTextContainer) { aTextContainer.innerHTML = ''; optHoldCharIndexA = 0; }
+  clearTimeout(optHoldTimerQ);
+  clearInterval(optHoldIntervalQ);
+  isOptHoldingQ = false;
+  clearTimeout(optHoldTimerA);
+  clearInterval(optHoldIntervalA);
+  isOptHoldingA = false;
+  if (qTextContainer) {
+    qTextContainer.textContent = SAMPLE_PREVIEW_Q_PREFIX;
+    optHoldCharIndexQ = 0;
+  }
+  if (aTextContainer) {
+    aTextContainer.innerHTML = '';
+    optHoldCharIndexA = 0;
+  }
 }
 
 function setupOptionPreviewEventListeners() {
@@ -1761,7 +1981,8 @@ function setupOptionPreviewEventListeners() {
     const startOptHoldQ = () => {
       if (userConfig.mode === 'NORMAL' || !userConfig.enableLongPress) return;
       isOptHoldingQ = true;
-      clearTimeout(optHoldTimerQ); clearInterval(optHoldIntervalQ);
+      clearTimeout(optHoldTimerQ);
+      clearInterval(optHoldIntervalQ);
       if (optHoldCharIndexQ >= qChars.length) {
         qTextContainer.textContent = SAMPLE_PREVIEW_Q_PREFIX;
         optHoldCharIndexQ = 0;
@@ -1776,14 +1997,24 @@ function setupOptionPreviewEventListeners() {
         }, holdMsQ);
       }, 200);
     };
-    const endOptHoldQ = () => { isOptHoldingQ = false; clearTimeout(optHoldTimerQ); clearInterval(optHoldIntervalQ); };
+    const endOptHoldQ = () => {
+      isOptHoldingQ = false;
+      clearTimeout(optHoldTimerQ);
+      clearInterval(optHoldIntervalQ);
+    };
     qTouchArea.addEventListener('mousedown', startOptHoldQ);
     qTouchArea.addEventListener('mouseup', endOptHoldQ);
     qTouchArea.addEventListener('mouseleave', endOptHoldQ);
     qTouchArea.addEventListener('touchstart', startOptHoldQ, { passive: true });
     qTouchArea.addEventListener('touchend', endOptHoldQ);
     qTouchArea.addEventListener('touchcancel', endOptHoldQ);
-    qTouchArea.addEventListener('touchmove', () => { endOptHoldQ(); }, { passive: true });
+    qTouchArea.addEventListener(
+      'touchmove',
+      () => {
+        endOptHoldQ();
+      },
+      { passive: true }
+    );
   }
 
   const aTouchArea = document.getElementById('hold-preview-a-touch-area');
@@ -1793,8 +2024,10 @@ function setupOptionPreviewEventListeners() {
     const startOptHoldA = () => {
       if (!userConfig.enableLongPress) return;
       isOptHoldingA = true;
-      clearTimeout(optHoldTimerA); clearInterval(optHoldIntervalA);
-      aTextContainer.innerHTML = '<span style="color: #10b981; font-weight: bold; font-size: 1.15em;">正解：<span id="opt-hold-ans-text"></span></span>';
+      clearTimeout(optHoldTimerA);
+      clearInterval(optHoldIntervalA);
+      aTextContainer.innerHTML =
+        '<span style="color: #10b981; font-weight: bold; font-size: 1.15em;">正解：<span id="opt-hold-ans-text"></span></span>';
       optHoldCharIndexA = 0;
       const holdMsA = (userConfig.holdSpeedA || 1.0) * 1000;
       optHoldTimerA = setTimeout(() => {
@@ -1808,8 +2041,13 @@ function setupOptionPreviewEventListeners() {
       }, 200);
     };
     const endOptHoldA = () => {
-      isOptHoldingA = false; clearTimeout(optHoldTimerA); clearInterval(optHoldIntervalA);
-      if (aTextContainer) { aTextContainer.innerHTML = ''; optHoldCharIndexA = 0; }
+      isOptHoldingA = false;
+      clearTimeout(optHoldTimerA);
+      clearInterval(optHoldIntervalA);
+      if (aTextContainer) {
+        aTextContainer.innerHTML = '';
+        optHoldCharIndexA = 0;
+      }
     };
     aTouchArea.addEventListener('mousedown', startOptHoldA);
     aTouchArea.addEventListener('mouseup', endOptHoldA);
@@ -1817,17 +2055,29 @@ function setupOptionPreviewEventListeners() {
     aTouchArea.addEventListener('touchstart', startOptHoldA, { passive: true });
     aTouchArea.addEventListener('touchend', endOptHoldA);
     aTouchArea.addEventListener('touchcancel', endOptHoldA);
-    aTouchArea.addEventListener('touchmove', () => { endOptHoldA(); }, { passive: true });
+    aTouchArea.addEventListener(
+      'touchmove',
+      () => {
+        endOptHoldA();
+      },
+      { passive: true }
+    );
   }
 }
 
 function resetAllSettingsSafe() {
-  if (confirm('【確認 1/2】\nすべての設定項目を初期状態に戻しますか？\n※デッキや学習記録などのデータは消去されません。')) {
+  if (
+    confirm('【確認 1/2】\nすべての設定項目を初期状態に戻しますか？\n※デッキや学習記録などのデータは消去されません。')
+  ) {
     if (confirm('【確認 2/2・最終確認】\n本当に設定を初期化してもよろしいですか？\nこの操作は取り消せません。')) {
       userConfig = { ...DEFAULT_USER_CONFIG, keyBinds: JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS)) };
       tempFontSize = userConfig.fontSize;
-      saveConfig(); applyConfigUI();
-      if (document.getElementById('opt-learning-screen') && !document.getElementById('opt-learning-screen').classList.contains('hidden')) {
+      saveConfig();
+      applyConfigUI();
+      if (
+        document.getElementById('opt-learning-screen') &&
+        !document.getElementById('opt-learning-screen').classList.contains('hidden')
+      ) {
         if (userConfig.mode === 'FAST') startPreviewTyping();
         resetOptHoldPreview();
       }
@@ -1838,7 +2088,11 @@ function resetAllSettingsSafe() {
 
 async function factoryResetAllDataSafe() {
   if (confirm('【警告 1/3】\n端末内のすべてのデータを完全に消去し、初回インストール時の状態に戻しますか？')) {
-    if (confirm('【警告 2/3】\n作成したすべてのデッキ、カード、学習時間、学習記録、設定が完全に消去されます。\n本当に実行してもよろしいですか？')) {
+    if (
+      confirm(
+        '【警告 2/3】\n作成したすべてのデッキ、カード、学習時間、学習記録、設定が完全に消去されます。\n本当に実行してもよろしいですか？'
+      )
+    ) {
       if (confirm('【警告 3/3・最終確認】\nこの操作は取り消せません。\n本当にすべてのデータを完全に消去しますか？')) {
         try {
           await idbClear();
@@ -1847,7 +2101,9 @@ async function factoryResetAllDataSafe() {
           await idbSet('memoly_config', { ...DEFAULT_USER_CONFIG });
           alert('初期状態にリセットしました。アプリを再起動します。');
           window.location.reload();
-        } catch (e) { alert('初期化中にエラーが発生しました: ' + e.message); }
+        } catch (e) {
+          alert('初期化中にエラーが発生しました: ' + e.message);
+        }
       }
     }
   }
@@ -1867,7 +2123,7 @@ function updateKeyBindButtons() {
 
   const setEvalBtnKey = (id, keys) => {
     const el = document.getElementById(id);
-    if (el && keys) el.textContent = Array.isArray(keys) ? (keys[0] || '') : String(keys);
+    if (el && keys) el.textContent = Array.isArray(keys) ? keys[0] || '' : String(keys);
   };
   setEvalBtnKey('btn-key-again', kb.again);
   setEvalBtnKey('btn-key-hard', kb.hard);
@@ -1884,7 +2140,8 @@ function startKeyBinding(action) {
 
 function resetKeyBinds() {
   userConfig.keyBinds = JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS));
-  saveConfig(); updateKeyBindButtons(); 
+  saveConfig();
+  updateKeyBindButtons();
   alert('キー割り当てをデフォルトに戻しました。');
 }
 
@@ -1915,8 +2172,8 @@ function renderTagFilterBar() {
   }
 
   const tagCounts = {};
-  decks.forEach(deck => {
-    (deck.tags || []).forEach(t => {
+  decks.forEach((deck) => {
+    (deck.tags || []).forEach((t) => {
       const trimmed = t.trim();
       if (trimmed) {
         tagCounts[trimmed] = (tagCounts[trimmed] || 0) + 1;
@@ -1944,13 +2201,13 @@ function renderTagFilterBar() {
   allBtn.onclick = () => setTagFilter('ALL');
   tagFilterBarEl.appendChild(allBtn);
 
-  uniqueTags.forEach(tag => {
+  uniqueTags.forEach((tag) => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    const isActive = (selectedTagFilter === tag);
+    const isActive = selectedTagFilter === tag;
     btn.className = `tag-btn ${isActive ? 'active' : ''}`;
     const color = getTagColor(tag);
-    
+
     if (!isActive) {
       btn.style.borderColor = color;
       btn.style.color = color;
@@ -1982,7 +2239,7 @@ function renderMenu() {
   }
 
   if (userConfig.enableTags && selectedTagFilter !== 'ALL') {
-    sortedDecks = sortedDecks.filter(d => Array.isArray(d.tags) && d.tags.includes(selectedTagFilter));
+    sortedDecks = sortedDecks.filter((d) => Array.isArray(d.tags) && d.tags.includes(selectedTagFilter));
   }
 
   if (sortedDecks.length === 0) {
@@ -1990,13 +2247,15 @@ function renderMenu() {
     return;
   }
 
-  sortedDecks.forEach(deck => {
-    const activeCards = (deck.cards || []).filter(c => !c.isHidden);
+  sortedDecks.forEach((deck) => {
+    const activeCards = (deck.cards || []).filter((c) => !c.isHidden);
     let totalScore = 0;
-    activeCards.forEach(c => { totalScore += getCardLevelInfo(c).score; });
+    activeCards.forEach((c) => {
+      totalScore += getCardLevelInfo(c).score;
+    });
     const retentionRate = activeCards.length > 0 ? ((totalScore / activeCards.length) * 100).toFixed(2) : '0.00';
-    
-    const dueCount = activeCards.filter(c => {
+
+    const dueCount = activeCards.filter((c) => {
       if (deck.excludeStar && c.interval >= 30) return false;
       return !c.dueDate || c.dueDate <= now;
     }).length;
@@ -2007,13 +2266,15 @@ function renderMenu() {
 
     let tagsHtml = '';
     if (userConfig.enableTags && Array.isArray(deck.tags) && deck.tags.length > 0) {
-      tagsHtml = deck.tags.map(t => {
-        const color = getTagColor(t);
-        return `<span class="deck-tag-badge" style="border-color: ${color}; color: ${color};">${t}</span>`;
-      }).join(' ');
+      tagsHtml = deck.tags
+        .map((t) => {
+          const color = getTagColor(t);
+          return `<span class="deck-tag-badge" style="border-color: ${color}; color: ${color};">${t}</span>`;
+        })
+        .join(' ');
     }
 
-    const cardEl = document.createElement('div'); 
+    const cardEl = document.createElement('div');
     cardEl.className = 'deck-card';
     cardEl.innerHTML = `
       <div class="deck-header-row">
@@ -2045,14 +2306,14 @@ let currentEditingDeckTags = [];
 
 function getAllExistingTags() {
   const tagSet = new Set();
-  decks.forEach(d => {
-    (d.tags || []).forEach(t => {
+  decks.forEach((d) => {
+    (d.tags || []).forEach((t) => {
       const trimmed = t.trim();
       if (trimmed) tagSet.add(trimmed);
     });
   });
   if (userConfig.tagColors) {
-    Object.keys(userConfig.tagColors).forEach(t => {
+    Object.keys(userConfig.tagColors).forEach((t) => {
       const trimmed = t.trim();
       if (trimmed) tagSet.add(trimmed);
     });
@@ -2063,25 +2324,26 @@ function getAllExistingTags() {
 function renderDeckTagsCheckboxList(deck) {
   if (!deckTagsCheckboxContainer) return;
   deckTagsCheckboxContainer.innerHTML = '';
-  
+
   if (deck) {
     currentEditingDeckTags = [...(deck.tags || [])];
   }
 
   const allTags = getAllExistingTags();
-  
+
   if (allTags.length === 0) {
-    deckTagsCheckboxContainer.innerHTML = '<span style="font-size: 0.85em; color: var(--text-sub);">登録されているタグがありません。「＋ 新規タグを作成」から追加してください。</span>';
+    deckTagsCheckboxContainer.innerHTML =
+      '<span style="font-size: 0.85em; color: var(--text-sub);">登録されているタグがありません。「＋ 新規タグを作成」から追加してください。</span>';
     return;
   }
 
-  allTags.forEach(tag => {
+  allTags.forEach((tag) => {
     const isChecked = currentEditingDeckTags.includes(tag);
     const color = getTagColor(tag);
-    
+
     const label = document.createElement('label');
     label.className = `tag-checkbox-label ${isChecked ? 'checked' : ''}`;
-    
+
     if (isChecked) {
       label.style.backgroundColor = color;
       label.style.borderColor = color;
@@ -2106,21 +2368,21 @@ function toggleDeckTagSelection(checkboxElem, tag) {
       currentEditingDeckTags.push(tag);
     }
   } else {
-    currentEditingDeckTags = currentEditingDeckTags.filter(t => t !== tag);
+    currentEditingDeckTags = currentEditingDeckTags.filter((t) => t !== tag);
   }
   renderDeckTagsCheckboxList();
 }
 
 function openDeckSettingsModal(deckId) {
   targetDeckForSettings = deckId;
-  const deck = decks.find(d => d.id === deckId);
+  const deck = decks.find((d) => d.id === deckId);
   if (!deck) return;
   if (deckSettingsTitle) deckSettingsTitle.textContent = `デッキ: ${deck.title}`;
-  
+
   if (deckTagsSettingRow) {
     deckTagsSettingRow.style.display = userConfig.enableTags ? 'block' : 'none';
   }
-  
+
   renderDeckTagsCheckboxList(deck);
 
   const currentMode = deck.orderMode || 'SHUFFLE';
@@ -2140,7 +2402,7 @@ function closeDeckSettingsModal() {
 
 function submitDeckSettings() {
   if (!targetDeckForSettings) return;
-  const deck = decks.find(d => d.id === targetDeckForSettings);
+  const deck = decks.find((d) => d.id === targetDeckForSettings);
   if (!deck) return;
 
   if (deckTagsSettingRow && userConfig.enableTags) {
@@ -2153,7 +2415,7 @@ function submitDeckSettings() {
   const cbExclude = document.getElementById('deck-exclude-star-option');
   if (cbExclude) deck.excludeStar = cbExclude.checked;
 
-  saveDecks(); 
+  saveDecks();
   renderMenu();
   closeDeckSettingsModal();
 }
@@ -2218,11 +2480,12 @@ function renderTagManagerList() {
 
   const allTags = getAllExistingTags();
   if (allTags.length === 0) {
-    container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--text-sub); font-size:0.85em;">現在登録されているタグはありません。</div>';
+    container.innerHTML =
+      '<div style="text-align:center; padding:15px; color:var(--text-sub); font-size:0.85em;">現在登録されているタグはありません。</div>';
     return;
   }
 
-  allTags.forEach(tag => {
+  allTags.forEach((tag) => {
     const color = getTagColor(tag);
     const row = document.createElement('div');
     row.className = 'tag-manager-row';
@@ -2251,9 +2514,9 @@ function renameTagPrompt(oldTag) {
   if (!newTag || !newTag.trim() || newTag.trim() === oldTag) return;
   const cleaned = newTag.trim();
 
-  decks.forEach(d => {
+  decks.forEach((d) => {
     if (Array.isArray(d.tags)) {
-      d.tags = d.tags.map(t => (t === oldTag ? cleaned : t));
+      d.tags = d.tags.map((t) => (t === oldTag ? cleaned : t));
     }
   });
 
@@ -2270,9 +2533,9 @@ function renameTagPrompt(oldTag) {
 function deleteTagUniversal(targetTag) {
   if (!confirm(`すべてのデッキからタグ「${targetTag}」を解除しますか？`)) return;
 
-  decks.forEach(d => {
+  decks.forEach((d) => {
     if (Array.isArray(d.tags)) {
-      d.tags = d.tags.filter(t => t !== targetTag);
+      d.tags = d.tags.filter((t) => t !== targetTag);
     }
   });
 
@@ -2291,15 +2554,15 @@ function showNewDeckModal() {
     const cleanedTitle = title.trim();
     if (checkDeckNameDuplicate(cleanedTitle)) {
       decks.push({
-        id: 'deck-' + Date.now(), 
-        title: cleanedTitle, 
+        id: 'deck-' + Date.now(),
+        title: cleanedTitle,
         tags: [],
-        orderMode: 'SHUFFLE', 
+        orderMode: 'SHUFFLE',
         excludeStar: false,
-        lastStudied: Date.now(), 
+        lastStudied: Date.now(),
         cards: []
       });
-      saveDecks(); 
+      saveDecks();
       renderMenu();
       if (userConfig.enableGamification) triggerAchievement('first_deck');
     }
@@ -2307,45 +2570,60 @@ function showNewDeckModal() {
 }
 
 function renameDeck(deckId) {
-  const deck = decks.find(d => d.id === deckId);
+  const deck = decks.find((d) => d.id === deckId);
   if (!deck) return;
   const newTitle = prompt('新しいデッキ名を入力してください:', deck.title);
   if (newTitle && newTitle.trim()) {
     const cleanedTitle = newTitle.trim();
     if (checkDeckNameDuplicate(cleanedTitle, deckId)) {
       deck.title = cleanedTitle;
-      saveDecks(); 
+      saveDecks();
       renderMenu();
     }
   }
 }
 
 function resetDeckProgress(deckId) {
-  const deck = decks.find(d => d.id === deckId);
+  const deck = decks.find((d) => d.id === deckId);
   if (!deck) return;
-  if (confirm(`デッキ「${deck.title}」の学習進捗をリセットしてもよろしいですか？\n（問題と答えのデータは消去されず、すべて未学習状態に戻ります）`)) {
-    (deck.cards || []).forEach(card => { 
-      card.dueDate = 0; card.interval = 0; card.easeFactor = 2.5; card.reps = 0; 
+  if (
+    confirm(
+      `デッキ「${deck.title}」の学習進捗をリセットしてもよろしいですか？\n（問題と答えのデータは消去されず、すべて未学習状態に戻ります）`
+    )
+  ) {
+    (deck.cards || []).forEach((card) => {
+      card.dueDate = 0;
+      card.interval = 0;
+      card.easeFactor = 2.5;
+      card.reps = 0;
+      card.againStreak = 0; // 進捗リセット時にagainStreakも確実にリセット
     });
-    saveDecks(); 
-    renderMenu(); 
+    saveDecks();
+    renderMenu();
     alert(`デッキ「${deck.title}」の学習進捗をリセットしました。`);
   }
 }
 
 function deleteDeck(deckId) {
-  const index = decks.findIndex(d => d.id === deckId);
+  const index = decks.findIndex((d) => d.id === deckId);
   if (index === -1) return;
   const deck = decks[index];
   if (confirm(`デッキ「${deck.title}」をごみ箱へ移動しますか？`)) {
     trashDecks.push({ originalIndex: index, deck: deck });
-    decks.splice(index, 1); 
-    saveDecks(); saveTrashDecks(); renderMenu();
+    decks.splice(index, 1);
+    saveDecks();
+    saveTrashDecks();
+    renderMenu();
   }
 }
 
-function openTrashModal() { renderTrashList(); if (trashModal) trashModal.classList.remove('hidden'); }
-function closeTrashModal() { if (trashModal) trashModal.classList.add('hidden'); }
+function openTrashModal() {
+  renderTrashList();
+  if (trashModal) trashModal.classList.remove('hidden');
+}
+function closeTrashModal() {
+  if (trashModal) trashModal.classList.add('hidden');
+}
 
 function renderTrashList() {
   if (!trashListContainer) return;
@@ -2359,7 +2637,7 @@ function renderTrashList() {
   if (clearAllBtn) clearAllBtn.style.display = 'inline-block';
 
   trashDecks.forEach((item, index) => {
-    const trashEl = document.createElement('div'); 
+    const trashEl = document.createElement('div');
     trashEl.className = 'trash-item';
     trashEl.innerHTML = `
       <div class="trash-item-info">
@@ -2386,32 +2664,43 @@ function restoreDeckFromTrash(index) {
       decks.push(item.deck);
     }
     trashDecks.splice(index, 1);
-    saveDecks(); saveTrashDecks(); renderTrashList(); renderMenu();
+    saveDecks();
+    saveTrashDecks();
+    renderTrashList();
+    renderMenu();
   }
 }
 
 function permanentlyDeleteDeck(index) {
   if (index < 0 || index >= trashDecks.length) return;
-  if (confirm('このデッキを完全に消してもよいですか？含まれるカードの学習記録も削除されます。この操作は取り消せません。')) {
+  if (
+    confirm('このデッキを完全に消してもよいですか？含まれるカードの学習記録も削除されます。この操作は取り消せません。')
+  ) {
     const item = trashDecks[index];
     if (item.deck && item.deck.cards) {
-      item.deck.cards.forEach(card => removeCardFromHistory(card.id));
+      item.deck.cards.forEach((card) => removeCardFromHistory(card.id));
     }
-    trashDecks.splice(index, 1); 
-    saveTrashDecks(); renderTrashList();
+    trashDecks.splice(index, 1);
+    saveTrashDecks();
+    renderTrashList();
   }
 }
 
 function clearAllTrash() {
   if (trashDecks.length === 0) return;
-  if (confirm('ごみ箱内のデッキをすべて完全削除しますか？含まれる全カードの学習記録も削除されます。この操作は取り消せません。')) {
-    trashDecks.forEach(item => { 
+  if (
+    confirm(
+      'ごみ箱内のデッキをすべて完全削除しますか？含まれる全カードの学習記録も削除されます。この操作は取り消せません。'
+    )
+  ) {
+    trashDecks.forEach((item) => {
       if (item.deck && item.deck.cards) {
-        item.deck.cards.forEach(card => removeCardFromHistory(card.id)); 
+        item.deck.cards.forEach((card) => removeCardFromHistory(card.id));
       }
     });
-    trashDecks = []; 
-    saveTrashDecks(); renderTrashList();
+    trashDecks = [];
+    saveTrashDecks();
+    renderTrashList();
   }
 }
 
@@ -2419,20 +2708,32 @@ function clearAllTrash() {
  * 13. カード個別編集・追加・リストモーダル & ' ' 消去機能
  * ===================================================================== */
 
-// 文字列の前後の半角スペース・全角スペース・引用符を綺麗に除去するヘルパー
 function cleanTextSurroundingSpacesAndQuotes(str) {
   if (!str) return '';
-  return str.trim().replace(/^[\s\uFEFF\xA0'"']+|[\s\uFEFF\xA0'"']+$/g, '').trim();
+
+  // 日本語（漢字、ひらがな、カタカナ、全角記号・句読点）の正規表現範囲
+  const jp = '[\\u3040-\\u309F\\u30A0-\\u30FF\\u4E00-\\u9FFF\\u3000-\\u303F\\uFF00-\\uFFEF]';
+
+  return str
+    // 1. 文頭・文末の余分な空白を除去
+    .trim()
+    // 2. 日本語と日本語の間にある半角・全角スペースを除去 (例: "山 梨 県" → "山梨県", "日本　で" → "日本で")
+    .replace(new RegExp(`(${jp})\\s+(${jp})`, 'g'), '$1$2')
+    // 1文字おきにスペースが入っているケースに対応するため2回実行 (例: "日 本 の" の連続パターン)
+    .replace(new RegExp(`(${jp})\\s+(${jp})`, 'g'), '$1$2')
+    // 3. 連続する複数の半角スペースを1つに統合 (英単語などの間隔調整)
+    .replace(/[ ]{2,}/g, ' ')
+    // 4. 前後のクォーテーションや余分な空白を最終トリム
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+    .trim();
 }
 
-// カード編集モーダル内のボタン用処理
 function cleanCardEditQuotes() {
   if (editCardQ) editCardQ.value = cleanTextSurroundingSpacesAndQuotes(editCardQ.value);
   if (editCardA) editCardA.value = cleanTextSurroundingSpacesAndQuotes(editCardA.value);
   if (editCardExp) editCardExp.value = cleanTextSurroundingSpacesAndQuotes(editCardExp.value);
 }
 
-// カード新規追加モーダル内のボタン用処理
 function cleanAddCardSpaces() {
   if (newCardQ) newCardQ.value = cleanTextSurroundingSpacesAndQuotes(newCardQ.value);
   if (newCardA) newCardA.value = cleanTextSurroundingSpacesAndQuotes(newCardA.value);
@@ -2457,17 +2758,30 @@ function submitAddCard() {
   const q = newCardQ ? cleanTextSurroundingSpacesAndQuotes(newCardQ.value) : '';
   const a = newCardA ? cleanTextSurroundingSpacesAndQuotes(newCardA.value) : '';
   const exp = newCardExp ? cleanTextSurroundingSpacesAndQuotes(newCardExp.value) : '';
-  if (!q || !a) { alert('問題文と答えは必須です。'); return; }
+  if (!q || !a) {
+    alert('問題文と答えは必須です。');
+    return;
+  }
 
-  const deck = decks.find(d => d.id === targetDeckForAddCard);
+  const deck = decks.find((d) => d.id === targetDeckForAddCard);
   if (deck) {
     if (!Array.isArray(deck.cards)) deck.cards = [];
     deck.cards.push({
-      id: `card-${Date.now()}`, 
-      question: q, answer: a, explanation: exp, image: currentAddingImageData,
-      dueDate: 0, interval: 0, easeFactor: 2.5, reps: 0, isHidden: false
+      id: `card-${Date.now()}`,
+      question: q,
+      answer: a,
+      explanation: exp,
+      image: currentAddingImageData,
+      dueDate: 0,
+      interval: 0,
+      easeFactor: 2.5,
+      reps: 0,
+      againStreak: 0,
+      isHidden: false
     });
-    saveDecks(); renderMenu(); closeAddCardModal();
+    saveDecks();
+    renderMenu();
+    closeAddCardModal();
   }
 }
 
@@ -2480,19 +2794,19 @@ function openEditModalForCard(card) {
   currentEditingImageData = card.image || '';
 
   if (currentEditingImageData && editCardImgElement && editCardImgPreview) {
-    editCardImgElement.src = currentEditingImageData; 
+    editCardImgElement.src = currentEditingImageData;
     editCardImgPreview.classList.remove('hidden');
   } else if (editCardImgElement && editCardImgPreview) {
-    editCardImgElement.src = ''; 
+    editCardImgElement.src = '';
     editCardImgPreview.classList.add('hidden');
   }
   if (editCardModal) editCardModal.classList.remove('hidden');
 }
 
 function openEditCardModal(cardId) {
-  const deck = decks.find(d => d.id === targetDeckForCardList);
+  const deck = decks.find((d) => d.id === targetDeckForCardList);
   if (!deck) return;
-  const card = (deck.cards || []).find(c => c.id === cardId);
+  const card = (deck.cards || []).find((c) => c.id === cardId);
   if (!card) return;
   openEditModalForCard(card);
 }
@@ -2505,7 +2819,8 @@ function openEditCurrentQuizCard(event) {
 
 function closeEditCardModal() {
   if (editCardModal) editCardModal.classList.add('hidden');
-  targetCardForEdit = null; currentEditingImageData = '';
+  targetCardForEdit = null;
+  currentEditingImageData = '';
 }
 
 function submitEditCard() {
@@ -2513,7 +2828,10 @@ function submitEditCard() {
   const q = editCardQ ? cleanTextSurroundingSpacesAndQuotes(editCardQ.value) : '';
   const a = editCardA ? cleanTextSurroundingSpacesAndQuotes(editCardA.value) : '';
   const exp = editCardExp ? cleanTextSurroundingSpacesAndQuotes(editCardExp.value) : '';
-  if (!q || !a) { alert('問題文と答えは必須です。'); return; }
+  if (!q || !a) {
+    alert('問題文と答えは必須です。');
+    return;
+  }
 
   targetCardForEdit.question = q;
   targetCardForEdit.answer = a;
@@ -2528,21 +2846,22 @@ function submitEditCard() {
     if (searchTermTextEl) searchTermTextEl.textContent = targetCardForEdit.answer;
 
     if (targetCardForEdit.image && answerImageEl && answerImageContainer) {
-      answerImageEl.src = targetCardForEdit.image; 
+      answerImageEl.src = targetCardForEdit.image;
       answerImageContainer.classList.remove('hidden');
     } else if (answerImageEl && answerImageContainer) {
-      answerImageEl.src = ''; 
+      answerImageEl.src = '';
       answerImageContainer.classList.add('hidden');
     }
   }
   if (targetDeckForCardList) renderCardList();
-  renderMenu(); closeEditCardModal();
+  renderMenu();
+  closeEditCardModal();
 }
 
 function openCardListModal(deckId) {
-  targetDeckForCardList = deckId; 
+  targetDeckForCardList = deckId;
   cardListPageIndex = 0;
-  const deck = decks.find(d => d.id === deckId);
+  const deck = decks.find((d) => d.id === deckId);
   if (!deck) return;
   if (cardListDeckTitle) cardListDeckTitle.textContent = `カード一覧: ${deck.title}`;
   renderCardList();
@@ -2555,7 +2874,7 @@ function closeCardListModal() {
 }
 
 function changeCardListPage(direction) {
-  const deck = decks.find(d => d.id === targetDeckForCardList);
+  const deck = decks.find((d) => d.id === targetDeckForCardList);
   if (!deck) return;
   const totalCards = (deck.cards || []).length;
   const totalPages = Math.ceil(totalCards / CARDS_PER_PAGE) || 1;
@@ -2566,7 +2885,7 @@ function changeCardListPage(direction) {
 }
 
 function renderCardList() {
-  const deck = decks.find(d => d.id === targetDeckForCardList);
+  const deck = decks.find((d) => d.id === targetDeckForCardList);
   if (!deck || !cardListContainer) return;
   cardListContainer.innerHTML = '';
   const cards = deck.cards || [];
@@ -2588,7 +2907,7 @@ function renderCardList() {
       levelBadgeHtml = `<div style="background-color: ${lvInfo.color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em; font-weight: bold;">Lv.${lvInfo.level}</div>`;
     }
 
-    const cardEl = document.createElement('div'); 
+    const cardEl = document.createElement('div');
     cardEl.className = 'card-item';
     cardEl.innerHTML = `
       <div class="card-item-info">
@@ -2619,12 +2938,14 @@ function renderCardList() {
 }
 
 function deleteCard(cardId) {
-  const deck = decks.find(d => d.id === targetDeckForCardList);
+  const deck = decks.find((d) => d.id === targetDeckForCardList);
   if (!deck) return;
   if (confirm('このカードを削除しますか？学習記録からも消去されます。')) {
-    deck.cards = (deck.cards || []).filter(c => c.id !== cardId);
-    removeCardFromHistory(cardId); 
-    saveDecks(); renderCardList(); renderMenu();
+    deck.cards = (deck.cards || []).filter((c) => c.id !== cardId);
+    removeCardFromHistory(cardId);
+    saveDecks();
+    renderCardList();
+    renderMenu();
   }
 }
 
@@ -2654,7 +2975,10 @@ function submitCsvImport() {
     return;
   }
   const titleInput = csvDeckNameInput ? csvDeckNameInput.value.trim() : '';
-  if (!titleInput) { alert('デッキ名を入力してください。'); return; }
+  if (!titleInput) {
+    alert('デッキ名を入力してください。');
+    return;
+  }
 
   if (checkDeckNameDuplicate(titleInput)) {
     const newDeck = {
@@ -2667,7 +2991,8 @@ function submitCsvImport() {
       cards: pendingCsvCards
     };
     decks.push(newDeck);
-    saveDecks(); renderMenu();
+    saveDecks();
+    renderMenu();
     closeCsvConfirmModal();
     alert(`デッキ「${newDeck.title}」を追加しました！（${newDeck.cards.length}枚）`);
     if (userConfig.enableGamification) triggerAchievement('first_deck');
@@ -2675,31 +3000,47 @@ function submitCsvImport() {
 }
 
 function parseCSVLine(line) {
-  const result = []; 
-  let current = ''; 
+  const result = [];
+  let current = '';
   let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
     if (char === '"') inQuotes = !inQuotes;
-    else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
-    else current += char;
+    else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else current += char;
   }
-  result.push(current); 
+  result.push(current);
   return result;
 }
 
 function processCsvText(text, fileName = 'インポートデッキ') {
-  const lines = text.split('\n'); 
-  if (lines.length === 0) { alert('データが空です。'); return; }
+  const lines = text.split('\n');
+  if (lines.length === 0) {
+    alert('データが空です。');
+    return;
+  }
 
-  const firstLineParts = parseCSVLine(lines[0]).map(p => p.trim().toLowerCase());
-  let qIdx = 0, aIdx = 1, expIdx = 2;
+  const firstLineParts = parseCSVLine(lines[0]).map((p) => p.trim().toLowerCase());
+  let qIdx = 0,
+    aIdx = 1,
+    expIdx = 2;
   let startIndex = 0;
 
   if (firstLineParts.includes('question') || firstLineParts.includes('question_plain')) {
-    qIdx = firstLineParts.indexOf('question_plain') !== -1 ? firstLineParts.indexOf('question_plain') : firstLineParts.indexOf('question');
-    aIdx = firstLineParts.indexOf('answer_plain') !== -1 ? firstLineParts.indexOf('answer_plain') : firstLineParts.indexOf('answer');
-    expIdx = firstLineParts.indexOf('remark_plain') !== -1 ? firstLineParts.indexOf('remark_plain') : firstLineParts.indexOf('remark');
+    qIdx =
+      firstLineParts.indexOf('question_plain') !== -1
+        ? firstLineParts.indexOf('question_plain')
+        : firstLineParts.indexOf('question');
+    aIdx =
+      firstLineParts.indexOf('answer_plain') !== -1
+        ? firstLineParts.indexOf('answer_plain')
+        : firstLineParts.indexOf('answer');
+    expIdx =
+      firstLineParts.indexOf('remark_plain') !== -1
+        ? firstLineParts.indexOf('remark_plain')
+        : firstLineParts.indexOf('remark');
     startIndex = 1;
   }
 
@@ -2707,17 +3048,25 @@ function processCsvText(text, fileName = 'インポートデッキ') {
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
-    const parts = parseCSVLine(line).map(p => p.trim());
-    
+    const parts = parseCSVLine(line).map((p) => p.trim());
+
     let q = cleanTextSurroundingSpacesAndQuotes(parts[qIdx] || '');
     let a = cleanTextSurroundingSpacesAndQuotes(parts[aIdx] || '');
     let exp = expIdx !== -1 ? cleanTextSurroundingSpacesAndQuotes(parts[expIdx] || '') : '';
 
     if (q && a) {
       newCards.push({
-        id: `card-${Date.now()}-${i}`, 
-        question: q, answer: a, explanation: exp, image: '', 
-        dueDate: 0, interval: 0, easeFactor: 2.5, reps: 0, isHidden: false
+        id: `card-${Date.now()}-${i}`,
+        question: q,
+        answer: a,
+        explanation: exp,
+        image: '',
+        dueDate: 0,
+        interval: 0,
+        easeFactor: 2.5,
+        reps: 0,
+        againStreak: 0,
+        isHidden: false
       });
     }
   }
@@ -2729,8 +3078,8 @@ function processCsvText(text, fileName = 'インポートデッキ') {
     if (csvConfirmCardCount) csvConfirmCardCount.textContent = `読み込み成功: ${newCards.length} 枚のカード`;
     if (csvConfirmModal) csvConfirmModal.classList.remove('hidden');
     if (csvDeckNameInput) csvDeckNameInput.focus();
-  } else { 
-    alert('有効なカードデータが見つかりませんでした。'); 
+  } else {
+    alert('有効なカードデータが見つかりませんでした。');
     if (csvInput) csvInput.value = '';
   }
 }
@@ -2739,21 +3088,39 @@ function setupDragAndDrop() {
   const dropZone = document.getElementById('drop-zone');
   if (!dropZone) return;
 
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); }, false));
-  ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.add('dragover'), false));
-  ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover'), false));
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((ev) =>
+    dropZone.addEventListener(
+      ev,
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      false
+    )
+  );
+  ['dragenter', 'dragover'].forEach((ev) =>
+    dropZone.addEventListener(ev, () => dropZone.classList.add('dragover'), false)
+  );
+  ['dragleave', 'drop'].forEach((ev) =>
+    dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover'), false)
+  );
 
   dropZone.addEventListener('drop', (e) => {
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const file = files[0];
-      if (!file.name.toLowerCase().endsWith('.csv')) { alert('CSVファイルのみ追加可能です。'); return; }
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        alert('CSVファイルのみ追加可能です。');
+        return;
+      }
       const reader = new FileReader();
-      reader.onload = event => processCsvText(event.target.result, file.name);
+      reader.onload = (event) => processCsvText(event.target.result, file.name);
       reader.readAsText(file, 'UTF-8');
     }
   });
-  dropZone.addEventListener('click', () => { if (csvInput) csvInput.click(); });
+  dropZone.addEventListener('click', () => {
+    if (csvInput) csvInput.click();
+  });
 }
 
 /* =====================================================================
@@ -2762,17 +3129,19 @@ function setupDragAndDrop() {
 
 function getNumericLevelInfo(card) {
   if (!card) return 0;
-  const val = card.interval || 0, reps = card.reps || 0, dueDate = card.dueDate || 0;
+  const val = card.interval || 0,
+    reps = card.reps || 0,
+    dueDate = card.dueDate || 0;
   if (val === 0 && reps === 0 && dueDate === 0) return 0;
   if (val >= 30) return 11;
   if (val >= 21) return 10;
   if (val >= 14) return 9;
   if (val >= 10) return 8;
-  if (val >= 7)  return 7;
-  if (val >= 5)  return 6;
-  if (val >= 3)  return 5;
-  if (val >= 2)  return 4;
-  if (val >= 1)  return 3;
+  if (val >= 7) return 7;
+  if (val >= 5) return 6;
+  if (val >= 3) return 5;
+  if (val >= 2) return 4;
+  if (val >= 1) return 3;
   if (val >= 0.5) return 2;
   return 1;
 }
@@ -2793,8 +3162,13 @@ function getIntervalForNumericLevel(level) {
 
 function calculateNextReview(card, rating) {
   const now = Date.now();
-  const ONE_MINUTE = 60 * 1000, ONE_HOUR = 60 * ONE_MINUTE, ONE_DAY = 24 * ONE_HOUR;
-  let nextInterval = card.interval, ease = card.easeFactor, reps = card.reps, nextDueDate = now;
+  const ONE_MINUTE = 60 * 1000,
+    ONE_HOUR = 60 * ONE_MINUTE,
+    ONE_DAY = 24 * ONE_HOUR;
+  let nextInterval = card.interval,
+    ease = card.easeFactor,
+    reps = card.reps,
+    nextDueDate = now;
 
   const currentLevel = getNumericLevelInfo(card);
   let nextLevel = currentLevel;
@@ -2804,7 +3178,7 @@ function calculateNextReview(card, rating) {
   }
 
   switch (rating) {
-    case 'again': 
+    case 'again':
       if (currentLevel === 0) {
         nextLevel = 1;
       } else {
@@ -2817,10 +3191,10 @@ function calculateNextReview(card, rating) {
       card.againStreak += 1;
       reps = Math.max(1, reps);
       nextInterval = getIntervalForNumericLevel(nextLevel);
-      nextDueDate = now + 1 * ONE_MINUTE; 
+      nextDueDate = now + 1 * ONE_MINUTE;
       break;
 
-    case 'hard': 
+    case 'hard':
       if (currentLevel === 0) {
         nextLevel = 1;
       } else {
@@ -2829,31 +3203,42 @@ function calculateNextReview(card, rating) {
       card.againStreak = 0;
       reps = Math.max(1, reps);
       nextInterval = getIntervalForNumericLevel(nextLevel);
-      nextDueDate = now + 12 * ONE_HOUR; 
-      ease = Math.max(1.3, ease - 0.15); 
+      nextDueDate = now + 12 * ONE_HOUR;
+      ease = Math.max(1.3, ease - 0.15);
       break;
 
     case 'good':
       card.againStreak = 0;
-      if (reps === 0) nextInterval = 1; 
-      else if (reps === 1) nextInterval = 3; 
-      else nextInterval = Math.round(nextInterval * ease);
-      reps += 1; 
-      nextDueDate = now + nextInterval * ONE_DAY; 
+      // Hard後などでintervalが1日未満（0.1〜0.5日）に落ちている場合は、ペナルティを維持して1日から再開する
+      if (reps === 0 || card.interval < 1) {
+        nextInterval = 1;
+      } else if (reps === 1) {
+        nextInterval = 3;
+      } else {
+        nextInterval = Math.round(nextInterval * ease);
+      }
+      reps += 1;
+      nextDueDate = now + nextInterval * ONE_DAY;
       break;
 
     case 'easy':
       card.againStreak = 0;
-      if (reps === 0) nextInterval = 4; 
-      else nextInterval = Math.round(nextInterval * ease * 1.3);
-      reps += 1; 
-      ease += 0.15; 
-      nextDueDate = now + nextInterval * ONE_DAY; 
+      // Easy評価の2回目ロジック（欠損していた分岐を追加し、肥大化を防止）
+      if (reps === 0) {
+        nextInterval = 4;
+      } else if (reps === 1) {
+        nextInterval = 3;
+      } else {
+        nextInterval = Math.round(nextInterval * ease * 1.3);
+      }
+      reps += 1;
+      ease += 0.15;
+      nextDueDate = now + nextInterval * ONE_DAY;
       break;
   }
-  
-  card.interval = nextInterval; 
-  card.easeFactor = ease; 
+
+  card.interval = nextInterval;
+  card.easeFactor = ease;
   card.reps = Math.max(1, reps);
   card.dueDate = nextDueDate;
   saveDecks();
@@ -2862,13 +3247,13 @@ function calculateNextReview(card, rating) {
 function renderCardLevelBadge(card) {
   const badge = document.getElementById('card-level-badge');
   if (!badge) return;
-  if (!userConfig.enableCardLevel || !card) { 
-    badge.classList.add('hidden'); 
-    return; 
+  if (!userConfig.enableCardLevel || !card) {
+    badge.classList.add('hidden');
+    return;
   }
   const lvInfo = getCardLevelInfo(card);
   badge.textContent = `暗記レベル ${lvInfo.level}`;
-  badge.style.backgroundColor = lvInfo.color; 
+  badge.style.backgroundColor = lvInfo.color;
   badge.classList.remove('hidden');
 }
 
@@ -2883,36 +3268,37 @@ function shuffleArray(array) {
 function sortStudyQueue(cards, mode) {
   const queue = [...cards];
   if (mode === 'SHUFFLE') return shuffleArray(queue);
-  else if (mode === 'WEAK') return queue.sort((a, b) => {
-    if (a.interval !== b.interval) return a.interval - b.interval;
-    return a.reps - b.reps;
-  });
+  else if (mode === 'WEAK')
+    return queue.sort((a, b) => {
+      if (a.interval !== b.interval) return a.interval - b.interval;
+      return a.reps - b.reps;
+    });
   return queue;
 }
 
 function startQuiz(deckId) {
-  currentDeck = decks.find(d => d.id === deckId);
+  currentDeck = decks.find((d) => d.id === deckId);
   if (!currentDeck || (currentDeck.cards || []).length === 0) {
-    alert('このデッキにはまだカードがありません。カードを追加してください。'); 
+    alert('このデッキにはまだカードがありません。カードを追加してください。');
     return;
   }
-  currentDeck.lastStudied = Date.now(); 
+  currentDeck.lastStudied = Date.now();
   saveDecks();
 
-  let activeCards = (currentDeck.cards || []).filter(c => !c.isHidden);
+  let activeCards = (currentDeck.cards || []).filter((c) => !c.isHidden);
   if (activeCards.length === 0) {
-    alert('このデッキには出題可能なカードがありません。（すべて非表示になっています）'); 
+    alert('このデッキには出題可能なカードがありません。（すべて非表示になっています）');
     return;
   }
 
-  let baseQueue = activeCards.filter(c => {
+  let baseQueue = activeCards.filter((c) => {
     if (currentDeck.excludeStar && c.interval >= 30) return false;
     return !c.dueDate || c.dueDate <= Date.now();
   });
 
   if (baseQueue.length === 0) {
     if (confirm('今日の復習カードは完了しています！全カードを再練習しますか？')) {
-      baseQueue = activeCards.filter(c => !(currentDeck.excludeStar && c.interval >= 30));
+      baseQueue = activeCards.filter((c) => !(currentDeck.excludeStar && c.interval >= 30));
       if (baseQueue.length === 0) {
         alert('除外設定により、出題可能なカードがありません。');
         return;
@@ -2921,7 +3307,7 @@ function startQuiz(deckId) {
   }
 
   studyQueue = sortStudyQueue(baseQueue, currentDeck.orderMode || 'SHUFFLE');
-  undoStack = []; 
+  undoStack = [];
   redoStack = [];
 
   sessionInitialCardLevels = {};
@@ -2931,13 +3317,13 @@ function startQuiz(deckId) {
   if (currentDeckTitleEl) currentDeckTitleEl.textContent = currentDeck.title;
   hideAllScreens();
   if (quizScreen) quizScreen.classList.remove('hidden');
-  
+
   startQuizStudyTimer();
   loadNextCard();
 }
 
 function loadNextCard() {
-  clearTimeout(holdTimer); 
+  clearTimeout(holdTimer);
   clearInterval(holdInterval);
   isHolding = false;
   didHold = false;
@@ -2953,8 +3339,8 @@ function loadNextCard() {
     if (userConfig.enableReviewResult && sessionAnswerHistory.length > 0) {
       showResultScreen(true);
     } else {
-      alert('このセッションの学習がすべて完了しました！'); 
-      showMenu(); 
+      alert('このセッションの学習がすべて完了しました！');
+      showMenu();
     }
     return;
   }
@@ -2965,7 +3351,7 @@ function loadNextCard() {
   }
 
   if (progressInfoEl) progressInfoEl.textContent = `残り: ${studyQueue.length}枚`;
-  updateUndoRedoUI(); 
+  updateUndoRedoUI();
   renderCardLevelBadge(currentCard);
 
   if (questionEl) questionEl.textContent = '';
@@ -2973,17 +3359,17 @@ function loadNextCard() {
   if (explanationTextEl) explanationTextEl.textContent = currentCard.explanation;
 
   if (currentCard.image && answerImageEl && answerImageContainer) {
-    answerImageEl.src = currentCard.image; 
+    answerImageEl.src = currentCard.image;
     answerImageContainer.classList.remove('hidden');
   } else if (answerImageEl && answerImageContainer) {
-    answerImageEl.src = ''; 
+    answerImageEl.src = '';
     answerImageContainer.classList.add('hidden');
   }
   if (searchTermTextEl) searchTermTextEl.textContent = currentCard.answer;
 
-  if (answerSectionEl) { 
-    answerSectionEl.classList.add('hidden'); 
-    answerSectionEl.classList.remove('holding-only-answer'); 
+  if (answerSectionEl) {
+    answerSectionEl.classList.add('hidden');
+    answerSectionEl.classList.remove('holding-only-answer');
   }
   if (resultStatsEl) resultStatsEl.classList.remove('hidden');
   if (buttonsEl) buttonsEl.classList.add('hidden');
@@ -2991,14 +3377,14 @@ function loadNextCard() {
   const longPressSuffix = userConfig.enableLongPress ? '（長押しで文字送り）' : '';
 
   if (userConfig.mode === 'FAST') {
-    charIndex = 0; 
+    charIndex = 0;
     state = 'TYPING';
     if (tapHintEl) tapHintEl.textContent = '画面タップ または キー操作でストップ';
     startTime = Date.now();
     stopTime = 0;
     clearInterval(timer);
-    
-    const chars = [...currentCard.question]; 
+
+    const chars = [...currentCard.question];
     timer = setInterval(() => {
       if (charIndex < chars.length) {
         if (questionEl) questionEl.textContent += chars[charIndex];
@@ -3016,7 +3402,10 @@ function loadNextCard() {
 function searchOnGoogle(event) {
   if (event) event.stopPropagation();
   markUserActivity();
-  if (!navigator.onLine) { alert('インターネット接続がありません。'); return; }
+  if (!navigator.onLine) {
+    alert('インターネット接続がありません。');
+    return;
+  }
   if (currentCard && currentCard.answer) {
     window.open(`https://www.google.com/search?q=${encodeURIComponent(currentCard.answer)}`, '_blank');
   }
@@ -3026,11 +3415,11 @@ function hideCurrentCard(event) {
   if (event) event.stopPropagation();
   markUserActivity();
   if (!currentCard) return;
-  
+
   if (confirm('このカードを今後の出題から除外（非表示）にしますか？\n※デッキ設定からいつでも再表示できます。')) {
     currentCard.isHidden = true;
     saveDecks();
-    studyQueue.shift(); 
+    studyQueue.shift();
     loadNextCard();
   }
 }
@@ -3068,12 +3457,12 @@ function renderHiddenCardsList() {
   let hiddenCards = [];
 
   if (hiddenCardsContext === 'DECK') {
-    const deck = decks.find(d => d.id === targetDeckForSettings);
+    const deck = decks.find((d) => d.id === targetDeckForSettings);
     if (!deck) return;
     if (titleEl) titleEl.textContent = `👀 非表示カード (${deck.title})`;
     if (restoreAllBtn) restoreAllBtn.textContent = 'このデッキをすべて再表示';
 
-    (deck.cards || []).forEach(card => {
+    (deck.cards || []).forEach((card) => {
       if (card && card.isHidden === true) {
         hiddenCards.push({ deckId: deck.id, deckTitle: deck.title, card: card });
       }
@@ -3082,8 +3471,8 @@ function renderHiddenCardsList() {
     if (titleEl) titleEl.textContent = '👀 非表示カード一覧（すべてのデッキ）';
     if (restoreAllBtn) restoreAllBtn.textContent = 'すべてのカードを再表示';
 
-    decks.forEach(deck => {
-      (deck.cards || []).forEach(card => {
+    decks.forEach((deck) => {
+      (deck.cards || []).forEach((card) => {
         if (card && card.isHidden === true) {
           hiddenCards.push({ deckId: deck.id, deckTitle: deck.title, card: card });
         }
@@ -3098,8 +3487,8 @@ function renderHiddenCardsList() {
   }
   if (restoreAllBtn) restoreAllBtn.style.display = 'inline-block';
 
-  hiddenCards.forEach(item => {
-    const cardEl = document.createElement('div'); 
+  hiddenCards.forEach((item) => {
+    const cardEl = document.createElement('div');
     cardEl.className = 'card-item';
     cardEl.innerHTML = `
       <div class="card-item-info">
@@ -3116,9 +3505,9 @@ function renderHiddenCardsList() {
 }
 
 function restoreSingleHiddenCardUniversal(deckId, cardId) {
-  const deck = decks.find(d => d.id === deckId);
+  const deck = decks.find((d) => d.id === deckId);
   if (deck) {
-    const card = (deck.cards || []).find(c => c.id === cardId);
+    const card = (deck.cards || []).find((c) => c.id === cardId);
     if (card) {
       card.isHidden = false;
       saveDecks();
@@ -3130,10 +3519,12 @@ function restoreSingleHiddenCardUniversal(deckId, cardId) {
 
 function restoreAllHiddenCardsUniversal() {
   if (hiddenCardsContext === 'DECK') {
-    const deck = decks.find(d => d.id === targetDeckForSettings);
+    const deck = decks.find((d) => d.id === targetDeckForSettings);
     if (!deck) return;
     if (confirm(`デッキ「${deck.title}」のすべての非表示カードを再表示しますか？`)) {
-      (deck.cards || []).forEach(c => { c.isHidden = false; });
+      (deck.cards || []).forEach((c) => {
+        c.isHidden = false;
+      });
       saveDecks();
       renderHiddenCardsList();
       renderMenu();
@@ -3142,8 +3533,8 @@ function restoreAllHiddenCardsUniversal() {
   } else {
     if (confirm('すべてのデッキに含まれる非表示カードを一括で再表示しますか？')) {
       let modified = false;
-      decks.forEach(deck => {
-        (deck.cards || []).forEach(card => {
+      decks.forEach((deck) => {
+        (deck.cards || []).forEach((card) => {
           if (card && card.isHidden === true) {
             card.isHidden = false;
             modified = true;
@@ -3169,7 +3560,7 @@ function finishTypingUI() {
   if (statProgressEl) statProgressEl.textContent = `読み上げ率: ${progressPercent}%`;
   if (statTimeEl) statTimeEl.textContent = `タイム: ${elapsedSeconds}秒`;
   if (resultStatsEl) resultStatsEl.classList.remove('hidden');
-  
+
   const longPressSuffix = userConfig.enableLongPress ? '（長押しで文字送り）' : '';
   if (tapHintEl) tapHintEl.textContent = `画面タップ または キー操作で答えを表示${longPressSuffix}`;
 }
@@ -3199,7 +3590,7 @@ function advanceQuizState() {
       }
       if (answerTextEl) answerTextEl.textContent = currentCard.answer;
       if (buttonsEl) buttonsEl.classList.remove('hidden');
-      
+
       const selectionHint = userConfig.enableTextSelection ? '\n問題文を長押しでテキスト選択が可能です。' : '';
       if (tapHintEl) tapHintEl.textContent = '評価ボタンを押すか、対応キーで回答してください。' + selectionHint;
     }
@@ -3218,7 +3609,7 @@ function advanceQuizState() {
       }
       if (answerTextEl) answerTextEl.textContent = currentCard.answer;
       if (buttonsEl) buttonsEl.classList.remove('hidden');
-      
+
       const selectionHint = userConfig.enableTextSelection ? '\n問題文を長押しでテキスト選択が可能です。' : '';
       if (tapHintEl) tapHintEl.textContent = '評価ボタンを押すか、対応キーで回答してください。' + selectionHint;
     }
@@ -3229,6 +3620,15 @@ function handleAnswer(rating) {
   markUserActivity();
   if (state !== 'ANSWERED' || !currentCard) return;
 
+  // 大元のデッキ内のカード実体と参照同期を担保
+  if (currentDeck && currentDeck.cards) {
+    const realCard = currentDeck.cards.find((c) => c.id === currentCard.id);
+    if (realCard && realCard !== currentCard) {
+      Object.assign(realCard, currentCard);
+      currentCard = realCard;
+    }
+  }
+
   const oldLevelInfo = sessionInitialCardLevels[currentCard.id] || getCardLevelInfo(currentCard);
 
   undoStack.push({
@@ -3236,7 +3636,7 @@ function handleAnswer(rating) {
     card: JSON.parse(JSON.stringify(currentCard)),
     studyLogs: JSON.parse(JSON.stringify(studyLogs)),
     dailyStudyHistory: JSON.parse(JSON.stringify(dailyStudyHistory)),
-    deckInfo: JSON.parse(JSON.stringify(decks.find(d => d.id === currentDeck.id))),
+    deckInfo: JSON.parse(JSON.stringify(decks.find((d) => d.id === currentDeck.id))),
     sessionHistory: JSON.parse(JSON.stringify(sessionAnswerHistory)),
     sessionCount: sessionStudiedCount
   });
@@ -3254,7 +3654,7 @@ function handleAnswer(rating) {
   });
   sessionStudiedCount++;
 
-  studyQueue.shift(); 
+  studyQueue.shift();
 
   const interval = userConfig.reviewInterval || 50;
   if (userConfig.enableReviewResult && sessionStudiedCount > 0 && sessionStudiedCount % interval === 0) {
@@ -3283,9 +3683,11 @@ function showResultScreen(isFinalOrExit = false) {
     return;
   }
 
-  const activeCards = (deck.cards || []).filter(c => !c.isHidden);
+  const activeCards = (deck.cards || []).filter((c) => !c.isHidden);
   let totalScore = 0;
-  activeCards.forEach(c => { totalScore += getCardLevelInfo(c).score; });
+  activeCards.forEach((c) => {
+    totalScore += getCardLevelInfo(c).score;
+  });
   const retention = activeCards.length > 0 ? ((totalScore / activeCards.length) * 100).toFixed(2) : '0.00';
 
   const retEl = document.getElementById('result-deck-retention');
@@ -3329,9 +3731,9 @@ function renderResultCardList() {
 
   const ratingStyles = {
     again: { bg: 'var(--result-again-bg)', border: '#ef4444', text: '#ef4444', label: 'もう一度' },
-    hard:  { bg: 'var(--result-hard-bg)',  border: '#f97316', text: '#f97316', label: '難しい' },
-    good:  { bg: 'var(--result-good-bg)',  border: '#3b82f6', text: '#3b82f6', label: 'ふつう' },
-    easy:  { bg: 'var(--result-easy-bg)',  border: '#10b981', text: '#10b981', label: '簡単' }
+    hard: { bg: 'var(--result-hard-bg)', border: '#f97316', text: '#f97316', label: '難しい' },
+    good: { bg: 'var(--result-good-bg)', border: '#3b82f6', text: '#3b82f6', label: 'ふつう' },
+    easy: { bg: 'var(--result-easy-bg)', border: '#10b981', text: '#10b981', label: '簡単' }
   };
 
   sessionAnswerHistory.forEach((item, idx) => {
@@ -3381,6 +3783,10 @@ function exitQuizToMenu() {
   showMenu();
 }
 
+/* =====================================================================
+ * Undo / Redo（参照切れバグを完全解決）
+ * ===================================================================== */
+
 function undoLastAnswer(event) {
   if (event) event.stopPropagation();
   markUserActivity();
@@ -3391,23 +3797,36 @@ function undoLastAnswer(event) {
     card: JSON.parse(JSON.stringify(currentCard)),
     studyLogs: JSON.parse(JSON.stringify(studyLogs)),
     dailyStudyHistory: JSON.parse(JSON.stringify(dailyStudyHistory)),
-    deckInfo: JSON.parse(JSON.stringify(decks.find(d => d.id === currentDeck.id))),
+    deckInfo: JSON.parse(JSON.stringify(decks.find((d) => d.id === currentDeck.id))),
     sessionHistory: JSON.parse(JSON.stringify(sessionAnswerHistory)),
     sessionCount: sessionStudiedCount
   });
 
   const previousState = undoStack.pop();
-  studyQueue = previousState.queue; 
-  currentCard = previousState.card;
-  studyLogs = previousState.studyLogs; 
+  studyLogs = previousState.studyLogs;
   dailyStudyHistory = previousState.dailyStudyHistory;
   sessionAnswerHistory = previousState.sessionHistory || [];
   sessionStudiedCount = previousState.sessionCount || 0;
 
-  const deckIdx = decks.findIndex(d => d.id === currentDeck.id);
-  if (deckIdx !== -1 && previousState.deckInfo) decks[deckIdx] = previousState.deckInfo;
+  const deckIdx = decks.findIndex((d) => d.id === currentDeck.id);
+  if (deckIdx !== -1 && previousState.deckInfo) {
+    decks[deckIdx] = previousState.deckInfo;
+    currentDeck = decks[deckIdx];
+  }
 
-  saveDecks(); saveLogs(); saveDailyHistory(); loadNextCard();
+  // 大元のデッキ内のカード実体と参照を再接続（参照切れによるLv.0固定化を防止）
+  if (currentDeck && currentDeck.cards) {
+    currentCard = currentDeck.cards.find((c) => c.id === previousState.card.id) || previousState.card;
+    studyQueue = previousState.queue.map((qc) => currentDeck.cards.find((c) => c.id === qc.id) || qc);
+  } else {
+    studyQueue = previousState.queue;
+    currentCard = previousState.card;
+  }
+
+  saveDecks();
+  saveLogs();
+  saveDailyHistory();
+  loadNextCard();
 }
 
 function redoLastAnswer(event) {
@@ -3420,23 +3839,36 @@ function redoLastAnswer(event) {
     card: JSON.parse(JSON.stringify(currentCard)),
     studyLogs: JSON.parse(JSON.stringify(studyLogs)),
     dailyStudyHistory: JSON.parse(JSON.stringify(dailyStudyHistory)),
-    deckInfo: JSON.parse(JSON.stringify(decks.find(d => d.id === currentDeck.id))),
+    deckInfo: JSON.parse(JSON.stringify(decks.find((d) => d.id === currentDeck.id))),
     sessionHistory: JSON.parse(JSON.stringify(sessionAnswerHistory)),
     sessionCount: sessionStudiedCount
   });
 
   const nextState = redoStack.pop();
-  studyQueue = nextState.queue; 
-  currentCard = nextState.card;
-  studyLogs = nextState.studyLogs; 
+  studyLogs = nextState.studyLogs;
   dailyStudyHistory = nextState.dailyStudyHistory;
   sessionAnswerHistory = nextState.sessionHistory || [];
   sessionStudiedCount = nextState.sessionCount || 0;
 
-  const deckIdx = decks.findIndex(d => d.id === currentDeck.id);
-  if (deckIdx !== -1 && nextState.deckInfo) decks[deckIdx] = nextState.deckInfo;
+  const deckIdx = decks.findIndex((d) => d.id === currentDeck.id);
+  if (deckIdx !== -1 && nextState.deckInfo) {
+    decks[deckIdx] = nextState.deckInfo;
+    currentDeck = decks[deckIdx];
+  }
 
-  saveDecks(); saveLogs(); saveDailyHistory(); loadNextCard();
+  // 大元のデッキ内のカード実体と参照を再接続
+  if (currentDeck && currentDeck.cards) {
+    currentCard = currentDeck.cards.find((c) => c.id === nextState.card.id) || nextState.card;
+    studyQueue = nextState.queue.map((qc) => currentDeck.cards.find((c) => c.id === qc.id) || qc);
+  } else {
+    studyQueue = nextState.queue;
+    currentCard = nextState.card;
+  }
+
+  saveDecks();
+  saveLogs();
+  saveDailyHistory();
+  loadNextCard();
 }
 
 function updateUndoRedoUI() {
@@ -3462,7 +3894,7 @@ function startHoldAction() {
     isHolding = true;
     didHold = true;
     const qArr = [...currentCard.question];
-    
+
     if (userConfig.mode === 'FAST' && charIndex < qArr.length) {
       holdPhase = 'QUESTION';
       if (state === 'TYPING') {
@@ -3505,7 +3937,7 @@ function endHoldAction() {
   markUserActivity();
   clearTimeout(holdTimer);
   clearInterval(holdInterval);
-  
+
   if (isHolding) {
     isHolding = false;
     lastHoldEndTime = Date.now();
@@ -3552,66 +3984,78 @@ function setupEventListeners() {
       if (state === 'ANSWERED' && e.target.closest('.selectable-text')) return;
       startHoldAction();
     });
-    
+
     quizCardEl.addEventListener('mouseup', (e) => {
       if (isTouchDevice) return;
       if (e.target.closest('button') || e.target.closest('a')) return;
       if (state === 'ANSWERED' && e.target.closest('.selectable-text')) return;
       const wasHolding = didHold;
       endHoldAction();
-      if (!wasHolding && (Date.now() - lastHoldEndTime > 300)) {
+      if (!wasHolding && Date.now() - lastHoldEndTime > 300) {
         advanceQuizState();
       }
     });
-    
+
     quizCardEl.addEventListener('mouseleave', () => {
       if (isTouchDevice) return;
       endHoldAction();
     });
 
-    quizCardEl.addEventListener('touchstart', (e) => {
-      isTouchDevice = true;
-      isScrolling = false;
-      if (e.target.closest('button') || e.target.closest('a')) return;
-      if (state === 'ANSWERED' && e.target.closest('.selectable-text')) return;
-      
-      const touch = e.touches[0];
-      touchStartX = touch.clientX;
-      touchStartY = touch.clientY;
-      
-      const sel = window.getSelection();
-      if (sel) sel.removeAllRanges();
-      
-      startHoldAction();
-    }, { passive: true });
-    
-    quizCardEl.addEventListener('touchmove', (e) => {
-      if (isHolding) return;
-      if (holdTimer) {
+    quizCardEl.addEventListener(
+      'touchstart',
+      (e) => {
+        isTouchDevice = true;
+        isScrolling = false;
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        if (state === 'ANSWERED' && e.target.closest('.selectable-text')) return;
+
         const touch = e.touches[0];
-        if (Math.abs(touch.clientX - touchStartX) > 40 || Math.abs(touch.clientY - touchStartY) > 40) {
-          isScrolling = true;
-          endHoldAction();
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+
+        const sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
+
+        startHoldAction();
+      },
+      { passive: true }
+    );
+
+    quizCardEl.addEventListener(
+      'touchmove',
+      (e) => {
+        if (isHolding) return;
+        if (holdTimer) {
+          const touch = e.touches[0];
+          if (Math.abs(touch.clientX - touchStartX) > 40 || Math.abs(touch.clientY - touchStartY) > 40) {
+            isScrolling = true;
+            endHoldAction();
+          }
         }
-      }
-    }, { passive: true });
+      },
+      { passive: true }
+    );
 
     quizCardEl.addEventListener('touchend', (e) => {
       if (e.target.closest('button') || e.target.closest('a')) return;
       if (state === 'ANSWERED' && e.target.closest('.selectable-text')) return;
-      
+
       const wasHolding = didHold;
       endHoldAction();
-      
-      if (!isScrolling && !wasHolding && (Date.now() - lastHoldEndTime > 400)) {
+
+      if (!isScrolling && !wasHolding && Date.now() - lastHoldEndTime > 400) {
         advanceQuizState();
       }
-      setTimeout(() => { isTouchDevice = false; }, 500);
+      setTimeout(() => {
+        isTouchDevice = false;
+      }, 500);
     });
 
     quizCardEl.addEventListener('touchcancel', () => {
       endHoldAction();
-      setTimeout(() => { isTouchDevice = false; }, 500);
+      setTimeout(() => {
+        isTouchDevice = false;
+      }, 500);
     });
   }
 
@@ -3622,8 +4066,8 @@ function setupEventListeners() {
       const keyName = e.code === 'Space' ? 'Space' : e.key;
       if (!userConfig.keyBinds[bindingKeyTarget]) userConfig.keyBinds[bindingKeyTarget] = [];
       userConfig.keyBinds[bindingKeyTarget] = [keyName];
-      saveConfig(); 
-      updateKeyBindButtons(); 
+      saveConfig();
+      updateKeyBindButtons();
       bindingKeyTarget = null;
       return;
     }
@@ -3633,17 +4077,27 @@ function setupEventListeners() {
 
     if (quizScreen && !quizScreen.classList.contains('hidden')) {
       const kb = userConfig.keyBinds || DEFAULT_KEY_BINDS;
-      const key = e.key, code = e.code;
+      const key = e.key,
+        code = e.code;
       const isMatch = (bindList) => bindList && (bindList.includes(key) || bindList.includes(code));
 
       if (isMatch(kb.advance)) {
-        e.preventDefault(); 
+        e.preventDefault();
         advanceQuizState();
       } else if (state === 'ANSWERED') {
-        if (isMatch(kb.again)) { e.preventDefault(); handleAnswer('again'); }
-        else if (isMatch(kb.hard)) { e.preventDefault(); handleAnswer('hard'); }
-        else if (isMatch(kb.good)) { e.preventDefault(); handleAnswer('good'); }
-        else if (isMatch(kb.easy)) { e.preventDefault(); handleAnswer('easy'); }
+        if (isMatch(kb.again)) {
+          e.preventDefault();
+          handleAnswer('again');
+        } else if (isMatch(kb.hard)) {
+          e.preventDefault();
+          handleAnswer('hard');
+        } else if (isMatch(kb.good)) {
+          e.preventDefault();
+          handleAnswer('good');
+        } else if (isMatch(kb.easy)) {
+          e.preventDefault();
+          handleAnswer('easy');
+        }
       }
     }
   });
@@ -3652,13 +4106,13 @@ function setupEventListeners() {
     csvInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      if (!file.name.toLowerCase().endsWith('.csv')) { 
-        alert('CSVファイルのみ追加可能です。'); 
-        csvInput.value = ''; 
-        return; 
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        alert('CSVファイルのみ追加可能です。');
+        csvInput.value = '';
+        return;
       }
       const reader = new FileReader();
-      reader.onload = event => processCsvText(event.target.result, file.name);
+      reader.onload = (event) => processCsvText(event.target.result, file.name);
       reader.readAsText(file, 'UTF-8');
     });
   }
