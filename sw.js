@@ -3,14 +3,14 @@
  * memoly - サービスワーカー (sw.js)
  * ===================================================================== */
 
-// v4に更新してキャッシュを完全にリセット
-const CACHE_NAME = 'memoly-cache-v5';
+// v6に更新してキャッシュを完全にリセット
+const CACHE_NAME = 'memoly-cache-v6';
 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './style.css?v=5',
-  './app.js?v=5'
+  './style.css?v=6',
+  './app.js?v=6'
 ];
 
 self.addEventListener('install', (event) => {
