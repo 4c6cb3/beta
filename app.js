@@ -1896,7 +1896,7 @@ function getTagColor(tagName) {
   if (userConfig.tagColors && userConfig.tagColors[tagName]) {
     return userConfig.tagColors[tagName];
   }
-  return '#2563eb'; // デフォルトのアクセントカラー
+  return '#2563eb';
 }
 
 function setTagFilter(tag) {
@@ -1937,7 +1937,6 @@ function renderTagFilterBar() {
     selectedTagFilter = 'ALL';
   }
 
-  // 「すべて」ボタン
   const allBtn = document.createElement('button');
   allBtn.type = 'button';
   allBtn.className = `tag-btn ${selectedTagFilter === 'ALL' ? 'active' : ''}`;
@@ -1945,7 +1944,6 @@ function renderTagFilterBar() {
   allBtn.onclick = () => setTagFilter('ALL');
   tagFilterBarEl.appendChild(allBtn);
 
-  // 各タグボタン
   uniqueTags.forEach(tag => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -2120,7 +2118,7 @@ function openDeckSettingsModal(deckId) {
   if (deckSettingsTitle) deckSettingsTitle.textContent = `デッキ: ${deck.title}`;
   
   if (deckTagsSettingRow) {
-    deckTagsSettingRow.style.display = userConfig.enableTags ? 'flex' : 'none';
+    deckTagsSettingRow.style.display = userConfig.enableTags ? 'block' : 'none';
   }
   
   renderDeckTagsCheckboxList(deck);
@@ -2421,14 +2419,24 @@ function clearAllTrash() {
  * 13. カード個別編集・追加・リストモーダル & ' ' 消去機能
  * ===================================================================== */
 
+// 文字列の前後の半角スペース・全角スペース・引用符を綺麗に除去するヘルパー
+function cleanTextSurroundingSpacesAndQuotes(str) {
+  if (!str) return '';
+  return str.trim().replace(/^[\s\uFEFF\xA0'"']+|[\s\uFEFF\xA0'"']+$/g, '').trim();
+}
+
+// カード編集モーダル内のボタン用処理
 function cleanCardEditQuotes() {
-  const cleanStr = (s) => {
-    if (!s) return '';
-    return s.trim().replace(/^['"']+|['"']+$/g, '').trim();
-  };
-  if (editCardQ) editCardQ.value = cleanStr(editCardQ.value);
-  if (editCardA) editCardA.value = cleanStr(editCardA.value);
-  if (editCardExp) editCardExp.value = cleanStr(editCardExp.value);
+  if (editCardQ) editCardQ.value = cleanTextSurroundingSpacesAndQuotes(editCardQ.value);
+  if (editCardA) editCardA.value = cleanTextSurroundingSpacesAndQuotes(editCardA.value);
+  if (editCardExp) editCardExp.value = cleanTextSurroundingSpacesAndQuotes(editCardExp.value);
+}
+
+// カード新規追加モーダル内のボタン用処理
+function cleanAddCardSpaces() {
+  if (newCardQ) newCardQ.value = cleanTextSurroundingSpacesAndQuotes(newCardQ.value);
+  if (newCardA) newCardA.value = cleanTextSurroundingSpacesAndQuotes(newCardA.value);
+  if (newCardExp) newCardExp.value = cleanTextSurroundingSpacesAndQuotes(newCardExp.value);
 }
 
 function openAddCardModal(deckId) {
@@ -2446,9 +2454,9 @@ function closeAddCardModal() {
 }
 
 function submitAddCard() {
-  const q = newCardQ ? newCardQ.value.trim() : '';
-  const a = newCardA ? newCardA.value.trim() : '';
-  const exp = newCardExp ? newCardExp.value.trim() : '';
+  const q = newCardQ ? cleanTextSurroundingSpacesAndQuotes(newCardQ.value) : '';
+  const a = newCardA ? cleanTextSurroundingSpacesAndQuotes(newCardA.value) : '';
+  const exp = newCardExp ? cleanTextSurroundingSpacesAndQuotes(newCardExp.value) : '';
   if (!q || !a) { alert('問題文と答えは必須です。'); return; }
 
   const deck = decks.find(d => d.id === targetDeckForAddCard);
@@ -2502,9 +2510,9 @@ function closeEditCardModal() {
 
 function submitEditCard() {
   if (!targetCardForEdit) return;
-  const q = editCardQ ? editCardQ.value.trim() : '';
-  const a = editCardA ? editCardA.value.trim() : '';
-  const exp = editCardExp ? editCardExp.value.trim() : '';
+  const q = editCardQ ? cleanTextSurroundingSpacesAndQuotes(editCardQ.value) : '';
+  const a = editCardA ? cleanTextSurroundingSpacesAndQuotes(editCardA.value) : '';
+  const exp = editCardExp ? cleanTextSurroundingSpacesAndQuotes(editCardExp.value) : '';
   if (!q || !a) { alert('問題文と答えは必須です。'); return; }
 
   targetCardForEdit.question = q;
@@ -2701,9 +2709,9 @@ function processCsvText(text, fileName = 'インポートデッキ') {
     if (!line.trim()) continue;
     const parts = parseCSVLine(line).map(p => p.trim());
     
-    let q = (parts[qIdx] || '').replace(/^"|"$/g, '').replace(/""/g, '"');
-    let a = (parts[aIdx] || '').replace(/^"|"$/g, '').replace(/""/g, '"');
-    let exp = expIdx !== -1 ? (parts[expIdx] || '').replace(/^"|"$/g, '').replace(/""/g, '"') : '';
+    let q = cleanTextSurroundingSpacesAndQuotes(parts[qIdx] || '');
+    let a = cleanTextSurroundingSpacesAndQuotes(parts[aIdx] || '');
+    let exp = expIdx !== -1 ? cleanTextSurroundingSpacesAndQuotes(parts[expIdx] || '') : '';
 
     if (q && a) {
       newCards.push({
