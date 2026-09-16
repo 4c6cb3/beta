@@ -1,10 +1,6 @@
 /**
  * =====================================================================
- * memoly - スタイルシート (style.css) - ver.2.1.0
- * 
- * アプリの見た目（レイアウト、色、文字サイズ、アニメーション）をすべて管理するファイル。
- * 画面サイズに応じたレスポンシブ対応や、ライト/ダークテーマの切り替え、
- * リザルト機能、ゲーミフィケーション（称号・EXP・目標）、カラータグUI定義を含みます。
+ * memoly - スタイルシート (style.css) - ver.2.1.0 (PWA Fix)
  * ===================================================================== */
 
 /* =====================================================================
@@ -16,30 +12,31 @@
   margin: 0;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  transition:
-    background-color 0.2s,
-    color 0.2s,
-    border-color 0.2s;
-
-  /* スマホでの長押しジェスチャー制御 */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* フォームの入力欄は文字の選択・コピー・入力を許可 */
 input,
 textarea {
   -webkit-user-select: text !important;
   user-select: text !important;
 }
 
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.btn, .btn-small, .btn-secondary, .btn-option-link, .tag-btn, .card, .calendar-cell, .modal-content {
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.2s, filter 0.2s;
+}
+
 /* =====================================================================
- * 2. カラーテーマのCSS変数（カスタムプロパティ）定義
+ * 2. カラーテーマのCSS変数
  * ===================================================================== */
 
-/* 【ライトテーマ】 白を基調とし、文字は濃いグレーや黒 */
 body.theme-light {
   --bg-color: #f0f2f5;
   --text-main: #111827;
@@ -59,7 +56,6 @@ body.theme-light {
   --result-easy-bg: rgba(16, 185, 129, 0.08);
 }
 
-/* 【ダークテーマ】 黒を基調とし、まぶしさを抑える */
 body.theme-dark {
   --bg-color: #121212;
   --text-main: #f3f4f6;
@@ -79,7 +75,6 @@ body.theme-dark {
   --result-easy-bg: rgba(16, 185, 129, 0.18);
 }
 
-/* 【デバイス連動テーマ（初期値）】 基本はライトテーマ */
 body.theme-device {
   --bg-color: #f0f2f5;
   --text-main: #111827;
@@ -99,7 +94,6 @@ body.theme-device {
   --result-easy-bg: rgba(16, 185, 129, 0.08);
 }
 
-/* 端末がダークモード時のデバイス連動上書き */
 @media (prefers-color-scheme: dark) {
   body.theme-device {
     --bg-color: #121212;
@@ -121,9 +115,6 @@ body.theme-device {
   }
 }
 
-/* =====================================================================
- * 3. 基礎フォントサイズ等のルート定義
- * ===================================================================== */
 :root {
   --font-base: 15px;
   --preview-font-size: 15px;
@@ -131,10 +122,11 @@ body.theme-device {
 }
 
 /* =====================================================================
- * 4. ページ全体の共通レイアウト（土台）
+ * 4. ページ全体の共通レイアウト（★ここをPWA完全対応に修正）
  * ===================================================================== */
 html {
   height: 100%;
+  width: 100%;
 }
 
 body {
@@ -143,17 +135,26 @@ body {
   font-size: var(--font-base);
   display: flex;
   justify-content: center;
-  /* iPhoneのDynamic Island・ノッチや下部バーを自動回避するセーフエリア余白を設定 */
-  padding-top: max(15px, env(safe-area-inset-top));
-  padding-bottom: max(15px, env(safe-area-inset-bottom));
-  padding-left: max(15px, env(safe-area-inset-left));
-  padding-right: max(15px, env(safe-area-inset-right));
+  
+  /* 100dvhのバグを回避するため、四隅に完全固定して下部の空白を消滅させる */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
   height: 100%;
-  height: 100dvh;
+
+  /* Dynamic Island やホームバーを安全に避けるパディング */
+  padding-top: max(16px, env(safe-area-inset-top));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  
   overflow: hidden;
+  box-sizing: border-box;
 }
 
-/* スマホサイズ（最大幅480px）に固定するメインコンテナ */
 .container {
   width: 100%;
   max-width: 480px;
@@ -162,6 +163,7 @@ body {
   gap: 10px;
   height: 100%;
   flex: 1;
+  overflow: hidden;
 }
 
 /* =====================================================================
@@ -180,7 +182,6 @@ body {
   margin-bottom: 10px;
 }
 
-/* デッキ設定時のタグ選択チェックボックスUI */
 .tag-checkbox-label {
   display: inline-flex;
   align-items: center;
@@ -288,7 +289,6 @@ header {
   color: var(--accent-color);
 }
 
-/* タグ絞り込みバー */
 .tag-filter-bar {
   scrollbar-width: none;
 }
@@ -716,7 +716,6 @@ header {
   text-decoration: none;
 }
 
-/* タグマネージャー（色・名前変更）アイテム */
 .tag-manager-row {
   display: flex;
   align-items: center;
@@ -759,7 +758,7 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .quiz-header h2 {
   font-size: 1.1em;
@@ -798,8 +797,8 @@ header {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 24px;
-  min-height: 220px;
+  padding: 20px;
+  min-height: 200px;
   flex: 1;
   box-shadow: 0 4px 12px var(--shadow);
   cursor: pointer;
@@ -832,10 +831,10 @@ header {
   font-weight: bold;
   line-height: 1.6;
   min-height: 80px;
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
   padding-right: 4px;
-  margin-top: 12px;
+  margin-top: 10px;
   color: var(--text-main);
   -webkit-overflow-scrolling: touch;
 }
@@ -848,21 +847,21 @@ header {
   font-size: 0.85em;
   font-weight: bold;
   text-align: center;
-  margin: 12px 0;
+  margin: 10px 0;
 }
 
 .answer-section {
-  margin-top: 12px;
+  margin-top: 10px;
 }
 .answer-section hr {
   border: none;
   border-top: 1px solid var(--card-border);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .answer-section h2 {
   color: #10b981;
   font-size: 1.25em;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .answer-section.holding-only-answer .hide-on-hold {
@@ -870,22 +869,22 @@ header {
 }
 
 .answer-image-container {
-  margin: 12px 0;
+  margin: 10px 0;
   text-align: center;
 }
 .answer-img {
   max-width: 100%;
-  max-height: 250px;
+  max-height: 200px;
   border-radius: 8px;
   border: 1px solid var(--card-border);
   object-fit: contain;
 }
 
 .quiz-footer {
-  margin-top: 15px;
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .button-grid {
   display: grid;
@@ -939,15 +938,17 @@ header {
 }
 
 /* =====================================================================
- * 11. モーダルダイアログ（ポップアップ画面）共通スタイル
+ * 11. モーダルダイアログ（ポップアップ画面）
  * ===================================================================== */
 
 .modal {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
@@ -970,10 +971,11 @@ header {
   flex-direction: column;
   gap: 12px;
   color: var(--text-main);
+  max-height: 85vh;
+  overflow-y: auto;
 }
 .modal-large {
   max-width: 460px;
-  max-height: 85vh;
 }
 
 .input-field {
@@ -1200,6 +1202,7 @@ header {
   }
 }
 
+/* 最強の非表示設定 */
 .hidden {
   display: none !important;
 }

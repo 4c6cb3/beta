@@ -13,7 +13,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   
-  <link rel="stylesheet" href="style.css?v3">
+  <!-- v=5 をつけて強制的に最新のCSSを読み込ませます -->
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body class="theme-device">
   <div class="container">
@@ -39,10 +40,8 @@
           </div>
         </div>
 
-        <!-- デッキタグ絞り込みバー（タグ機能ON時のみ表示） -->
-        <div id="tag-filter-bar" class="tag-filter-bar" style="display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px 0; -webkit-overflow-scrolling: touch;">
-          <!-- JSで動的にタグボタンを生成 -->
-        </div>
+        <!-- デッキタグ絞り込みバー -->
+        <div id="tag-filter-bar" class="tag-filter-bar" style="display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px 0; -webkit-overflow-scrolling: touch;"></div>
       </div>
 
       <div class="scrollable-content">
@@ -645,15 +644,6 @@
         <h3>⚙ デッキ設定</h3>
         <p id="deck-settings-title" class="help-text" style="margin-bottom: 8px; font-weight: bold;"></p>
         
-        <!-- デッキタグ設定欄（履歴からチェック＆新規作成ボタン） -->
-        <div id="deck-tags-setting-row" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
-          <label style="font-weight: bold; font-size: 0.9em; color: var(--header-text);">タグ設定 (複数選択可):</label>
-          <div id="deck-tags-checkbox-container" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; padding: 4px 0;">
-            <!-- JSで動的にタグのチェックボックスを生成 -->
-          </div>
-          <button type="button" class="btn-small" style="align-self: flex-start; margin-top: 2px;" onclick="openNewTagModal()">＋ 新規タグを作成</button>
-        </div>
-
         <div class="option-controls" style="margin-bottom: 12px;">
           <div style="font-weight: bold; font-size: 0.9em; margin-bottom: 4px; color: var(--header-text);">出題順モード:</div>
           <label class="radio-label"><input type="radio" name="deck-order-option" value="SHUFFLE"><span>シャッフルモード（ランダム出題）</span></label>
@@ -678,45 +668,6 @@
         <div class="modal-buttons" style="margin-top: 14px;">
           <button type="button" class="btn-modal-cancel" onclick="closeDeckSettingsModal()">キャンセル</button>
           <button type="button" class="btn-modal-submit" onclick="submitDeckSettings()">設定を保存</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 新規タグ作成モーダル（確実な最前面表示のため z-index: 2000 を設定） -->
-    <div id="new-tag-modal" class="modal hidden" style="z-index: 2000;">
-      <div class="modal-content">
-        <h3>＋ 新規タグ作成</h3>
-        <p class="help-text" style="margin-bottom: 6px;">タグの名前と色を設定してください。</p>
-        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-          <div>
-            <label for="new-tag-name-input" style="font-size: 0.85em; font-weight: bold; display: block; margin-bottom: 4px;">タグ名:</label>
-            <input type="text" id="new-tag-name-input" class="input-field" placeholder="例: 日本史, 漫画・アニメ・ゲーム, 資格 etc...">
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <label for="new-tag-color-input" style="font-size: 0.85em; font-weight: bold;">タグの色:</label>
-            <input type="color" id="new-tag-color-input" value="#2563eb" style="width: 44px; height: 44px; border: none; cursor: pointer; background: none; padding: 0;">
-          </div>
-        </div>
-        <div class="modal-buttons" style="margin-top: 16px;">
-          <button type="button" class="btn-modal-cancel" onclick="closeNewTagModal()">キャンセル</button>
-          <button type="button" class="btn-modal-submit" onclick="submitNewTag()">作成して追加</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- タグ個別カラー・名前編集モーダル -->
-    <div id="tag-manager-modal" class="modal hidden modal-top">
-      <div class="modal-content modal-large">
-        <div class="trash-header">
-          <h3>🏷️ タグの一覧・色と名前の編集</h3>
-        </div>
-        <p class="help-text" style="margin-bottom: 6px; font-size: 0.8em;">作成済みのタグの色や名前を変更できます。名前を変更すると登録済みデッキ側も自動更新されます。</p>
-        <div style="margin-bottom: 8px;">
-          <button type="button" class="btn-small" onclick="openNewTagModal()">＋ 新しいタグを追加</button>
-        </div>
-        <div id="tag-manager-list" class="card-list-container" style="max-height: 300px;"></div>
-        <div class="modal-buttons" style="margin-top: 8px;">
-          <button type="button" class="btn-modal-submit" onclick="closeTagManagerModal()">完了</button>
         </div>
       </div>
     </div>
@@ -852,7 +803,8 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=3')
+        // Service Workerの登録
+        navigator.serviceWorker.register('./sw.js')
           .then((registration) => {
             console.log('[Service Worker] 登録が成功しました:', registration.scope);
           })
@@ -862,6 +814,6 @@
       });
     }
   </script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

@@ -3,13 +3,14 @@
  * memoly - サービスワーカー (sw.js)
  * ===================================================================== */
 
-const CACHE_NAME = 'memoly-cache-v2.1.0-202609161915';
+// v4に更新してキャッシュを完全にリセット
+const CACHE_NAME = 'memoly-cache-v4';
 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './style.css?v=3',
-  './app.js?v=3'
+  './style.css?v=4',
+  './app.js?v=4'
 ];
 
 self.addEventListener('install', (event) => {
@@ -18,7 +19,7 @@ self.addEventListener('install', (event) => {
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  self.skipWaiting(); // すぐに新しいService Workerを起動
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -37,7 +38,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // HTTP/HTTPS 以外のリクエスト（拡張機能など）やGET以外の通信はキャッシュを通さない（エラー防止）
+  // ブラウザの拡張機能など（HTTP/HTTPS以外・GET以外）の通信は無視してエラーを防ぐ
   if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
     return;
   }
@@ -45,14 +46,14 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // ネットワークから取得成功したら、それをキャッシュに保存して返す（常に最新を保つ）
+        // ネットワーク通信が成功したら、常に最新をキャッシュに保存して返す
         return caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, networkResponse.clone());
           return networkResponse;
         });
       })
       .catch(() => {
-        // オフライン時のみキャッシュから返す
+        // オフラインなどで通信に失敗した場合のみ、キャッシュから返す
         return caches.match(event.request);
       })
   );
