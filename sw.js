@@ -5,7 +5,7 @@
  * ===================================================================== */
 
 // キャッシュバージョンを上げて古いキャッシュを一掃
-const CACHE_NAME = 'memoly-cache-v2.1.0-202609161851';
+const CACHE_NAME = 'memoly-cache-v2.1.0-202609161849';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -42,10 +42,17 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return cachedResponse || fetch(event.request).catch(() => {
-        console.log('[Service Worker] オフラインのためキャッシュから取得できませんでした');
-      });
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        // ネットワーク通信が成功したら、最新のデータをキャッシュに保存して返す
+        return caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, networkResponse.clone());
+          return networkResponse;
+        });
+      })
+      .catch(() => {
+        // オフラインなどで通信に失敗した場合のみ、キャッシュを返す
+        return caches.match(event.request);
+      })
   );
 });
