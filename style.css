@@ -1,10 +1,10 @@
 /**
  * =====================================================================
- * memoly - スタイルシート (style.css) - ver.1.6.0
+ * memoly - スタイルシート (style.css) - ver.2.1.0
  * 
  * アプリの見た目（レイアウト、色、文字サイズ、アニメーション）をすべて管理するファイル。
  * 画面サイズに応じたレスポンシブ対応や、ライト/ダークテーマの切り替え、
- * リザルト機能、ゲーミフィケーション（称号・EXP・目標）のUI定義を含みます。
+ * リザルト機能、ゲーミフィケーション（称号・EXP・目標）、カラータグUI定義を含みます。
  * ===================================================================== */
 
 /* =====================================================================
@@ -166,6 +166,31 @@ body {
 .fixed-header-area { 
   flex-shrink: 0; 
   margin-bottom: 10px; 
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+
+/* デッキ設定時のタグ選択チェックボックスUI */
+.tag-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-color);
+  border: 1px solid var(--card-border);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  font-weight: bold;
+  cursor: pointer;
+  color: var(--text-main);
+  user-select: none;
+}
+.tag-checkbox-label.checked {
+  background: var(--accent-color);
+  color: #ffffff;
+  border-color: var(--accent-color);
+}
+.tag-checkbox-label input[type="checkbox"] {
+  display: none;
 }
 
 .scrollable-content {
@@ -211,6 +236,43 @@ header { text-align: center; margin-bottom: 12px; }
 }
 .btn-secondary { color: var(--accent-color); }
 
+/* タグ絞り込みバー */
+.tag-filter-bar {
+  scrollbar-width: none;
+}
+.tag-filter-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tag-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-sub);
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 0.8em;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-btn.active {
+  background: var(--accent-color);
+  color: #ffffff !important;
+  border-color: var(--accent-color) !important;
+}
+
+.tag-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
 /* =====================================================================
  * 7. デッキカード一覧（メニュー画面）
  * ===================================================================== */
@@ -248,6 +310,14 @@ header { text-align: center; margin-bottom: 12px; }
   display: inline-block; font-size: 0.75em; color: var(--text-sub);
   background: var(--bg-color); border: 1px solid var(--card-border);
   padding: 2px 8px; border-radius: 4px; margin-bottom: 12px;
+}
+
+.deck-tag-badge {
+  display: inline-block; font-size: 0.75em;
+  background: var(--stats-bg); color: var(--stats-text);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  padding: 2px 8px; border-radius: 10px;
+  font-weight: bold;
 }
 
 .deck-manage-btns { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -377,6 +447,33 @@ header { text-align: center; margin-bottom: 12px; }
   font-weight: bold; text-decoration: none;
 }
 
+/* タグマネージャー（色・名前変更）アイテム */
+.tag-manager-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-color);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+}
+.tag-manager-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.tag-color-input {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+}
+
 /* =====================================================================
  * 10. クイズ学習画面
  * ===================================================================== */
@@ -455,7 +552,7 @@ header { text-align: center; margin-bottom: 12px; }
 .question-container.selectable-text * {
   -webkit-user-select: text !important;
   user-select: text !important;
-  -webkit-touch-callout: default !important; /* iOSの長押しメニュー（コピー等）を許可 */
+  -webkit-touch-callout: default !important;
   cursor: text;
 }
 
@@ -548,8 +645,11 @@ header { text-align: center; margin-bottom: 12px; }
  * 13. PC（マウス操作時）向けのホバーエフェクト
  * ===================================================================== */
 @media (hover: hover) and (pointer: fine) {
-  .btn-secondary:hover, .btn-option-link:hover, .btn-small:hover {
+  .btn-secondary:hover, .btn-option-link:hover, .btn-small:hover, .tag-btn:hover {
     background-color: var(--stats-bg);
+  }
+  .tag-btn.active:hover {
+    background-color: var(--accent-color);
   }
   .btn-start:hover, .btn-modal-submit:hover {
     filter: brightness(1.1);

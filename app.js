@@ -1,6 +1,6 @@
 /**
  * =====================================================================
- * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.1.6.2
+ * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.2.1.0
  * ===================================================================== */
 
 /* =====================================================================
@@ -11,6 +11,7 @@ const defaultDecks = [
   {
     id: 'deck-1',
     title: '雑学クイズ基本セット',
+    tags: ['基本'],
     orderMode: 'SHUFFLE',
     excludeStar: false,
     lastStudied: Date.now(),
@@ -67,7 +68,9 @@ const DEFAULT_USER_CONFIG = {
   enableGamification: false,
   dailyGoalCards: 50,
   dailyGoalMinutes: 15,
-  enableTextSelection: false, 
+  enableTextSelection: false,
+  enableTags: false,
+  tagColors: {},
   keyBinds: { ...DEFAULT_KEY_BINDS }
 };
 
@@ -120,6 +123,8 @@ let userExp = 0;
 let userLevel = 1;
 let userAchievements = {};
 let pendingAchievementAlerts = [];
+
+let selectedTagFilter = 'ALL';
 
 let currentDeck = null;
 let studyQueue = [];
@@ -192,11 +197,12 @@ const SAMPLE_PREVIEW_Q_PREFIX = '山梨県と静岡県にまたがる、';
 
 let menuScreen, statsScreen, optionScreen, quizScreen, resultScreen,
   optLearningScreen, optCustomScreen, optDisplayScreen, optDeckScreen, optDataScreen,
-  addCardModal, editCardModal, cardListModal, deckSettingsModal,
+  addCardModal, editCardModal, cardListModal, deckSettingsModal, tagManagerModal,
   csvImportModal, csvExportModal, exportDeckSelect, trashModal, trashListContainer, hiddenCardsModal, hiddenCardsListContainer,
   csvConfirmModal, csvDeckNameInput, csvConfirmCardCount,
   goalSettingModal, achievementModal,
-  deckListEl, csvInput, currentDeckTitleEl, progressInfoEl, questionEl, 
+  newTagModal, newTagNameInput, newTagColorInput,
+  deckListEl, tagFilterBarEl, csvInput, currentDeckTitleEl, progressInfoEl, questionEl, 
   answerSectionEl, answerTextEl, explanationTextEl, answerImageContainer, answerImageEl,
   searchTermTextEl, resultStatsEl, statProgressEl, statTimeEl, buttonsEl,
   tapHintEl, streakDaysEl, streakMessageEl, calendarTitleEl, calendarGridEl,
@@ -207,7 +213,7 @@ let menuScreen, statsScreen, optionScreen, quizScreen, resultScreen,
   editCardImgInput, editCardImgPreview, editCardImgElement,
   speedOptionGroup, charSpeedRange, speedValueDisplay, previewTextContainer,
   fontSizeRange, fontSizeValueDisplay, cardListDeckTitle, cardListContainer,
-  cardPaginationEl, deckSettingsTitle, undoBtn, redoBtn;
+  cardPaginationEl, deckSettingsTitle, deckTagsCheckboxContainer, deckTagsSettingRow, undoBtn, redoBtn;
 
 function initDOMElements() {
   menuScreen = document.getElementById('menu-screen');
@@ -226,6 +232,7 @@ function initDOMElements() {
   editCardModal = document.getElementById('edit-card-modal');
   cardListModal = document.getElementById('card-list-modal');
   deckSettingsModal = document.getElementById('deck-settings-modal');
+  tagManagerModal = document.getElementById('tag-manager-modal');
   csvImportModal = document.getElementById('csv-import-modal');
   csvExportModal = document.getElementById('csv-export-modal');
   exportDeckSelect = document.getElementById('export-deck-select');
@@ -241,7 +248,12 @@ function initDOMElements() {
   goalSettingModal = document.getElementById('goal-setting-modal');
   achievementModal = document.getElementById('achievement-modal');
 
+  newTagModal = document.getElementById('new-tag-modal');
+  newTagNameInput = document.getElementById('new-tag-name-input');
+  newTagColorInput = document.getElementById('new-tag-color-input');
+
   deckListEl = document.getElementById('deck-list');
+  tagFilterBarEl = document.getElementById('tag-filter-bar');
   csvInput = document.getElementById('csv-file-input');
 
   currentDeckTitleEl = document.getElementById('current-deck-title');
@@ -302,6 +314,8 @@ function initDOMElements() {
   cardListContainer = document.getElementById('card-list-container');
   cardPaginationEl = document.getElementById('card-pagination');
   deckSettingsTitle = document.getElementById('deck-settings-title');
+  deckTagsCheckboxContainer = document.getElementById('deck-tags-checkbox-container');
+  deckTagsSettingRow = document.getElementById('deck-tags-setting-row');
 
   undoBtn = document.getElementById('undo-btn');
   redoBtn = document.getElementById('redo-btn');
@@ -649,7 +663,7 @@ function removeEditCardImage() {
 }
 
 function setupImageDropZone(dropZoneId, inputId, onImageLoaded) {
-  const dropZone = document.getElementById(dropZoneId);
+  const dropZone = document.getElementById('drop-zone');
   const input = document.getElementById(inputId);
   if (!dropZone || !input) return;
 
@@ -695,7 +709,9 @@ async function initApp() {
       if (userConfig.enableGamification === undefined) userConfig.enableGamification = false;
       if (userConfig.dailyGoalCards === undefined) userConfig.dailyGoalCards = 50;
       if (userConfig.dailyGoalMinutes === undefined) userConfig.dailyGoalMinutes = 15;
-      if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = true; // ←【追加】初期値の補完
+      if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = true;
+      if (userConfig.enableTags === undefined) userConfig.enableTags = true;
+      if (!userConfig.tagColors) userConfig.tagColors = {};
       if (!userConfig.keyBinds) userConfig.keyBinds = JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS));
     }
     tempFontSize = userConfig.fontSize;
@@ -704,6 +720,7 @@ async function initApp() {
     if (Array.isArray(savedDecks) && savedDecks.length > 0) {
       decks = savedDecks;
       decks.forEach(d => {
+        if (!Array.isArray(d.tags)) d.tags = [];
         if (!d.orderMode) d.orderMode = 'SHUFFLE';
         if (d.excludeStar === undefined) d.excludeStar = false;
         if (!d.lastStudied) d.lastStudied = 0;
@@ -909,9 +926,20 @@ function applyConfigUI() {
     }
   }
 
-  // 【追加】テキスト選択トグルの反映
   const cbTextSelection = document.getElementById('toggle-text-selection');
   if (cbTextSelection) cbTextSelection.checked = userConfig.enableTextSelection;
+
+  const cbEnableTags = document.getElementById('toggle-enable-tags');
+  if (cbEnableTags) cbEnableTags.checked = !!userConfig.enableTags;
+
+  const tagManageBtnCont = document.getElementById('tag-management-btn-container');
+  if (tagManageBtnCont) {
+    tagManageBtnCont.style.display = userConfig.enableTags ? 'block' : 'none';
+  }
+
+  if (deckTagsSettingRow) {
+    deckTagsSettingRow.style.display = userConfig.enableTags ? 'flex' : 'none';
+  }
 
   updateKeyBindButtons();
 }
@@ -1691,10 +1719,15 @@ function toggleGamificationOption(enabled) {
   if (enabled) checkRetroactiveAchievements();
 }
 
-// 【追加】テキスト選択の許可フラグを切り替える関数
 function toggleTextSelectionOption(enabled) {
   userConfig.enableTextSelection = enabled;
   saveConfig();
+}
+
+function toggleEnableTagsOption(enabled) {
+  userConfig.enableTags = enabled;
+  saveConfig();
+  applyConfigUI();
 }
 
 function startPreviewTyping() {
@@ -1856,11 +1889,87 @@ function resetKeyBinds() {
 }
 
 /* =====================================================================
- * 12. メインメニュー画面 & デッキ管理
+ * 12. メインメニュー画面 & デッキ管理 & タグ管理機能
  * ===================================================================== */
+
+function getTagColor(tagName) {
+  if (userConfig.tagColors && userConfig.tagColors[tagName]) {
+    return userConfig.tagColors[tagName];
+  }
+  return '#2563eb'; // デフォルトのアクセントカラー
+}
+
+function setTagFilter(tag) {
+  selectedTagFilter = tag;
+  renderMenu();
+}
+
+function renderTagFilterBar() {
+  if (!tagFilterBarEl) return;
+  tagFilterBarEl.innerHTML = '';
+
+  if (!userConfig.enableTags) {
+    tagFilterBarEl.style.display = 'none';
+    selectedTagFilter = 'ALL';
+    return;
+  }
+
+  const tagCounts = {};
+  decks.forEach(deck => {
+    (deck.tags || []).forEach(t => {
+      const trimmed = t.trim();
+      if (trimmed) {
+        tagCounts[trimmed] = (tagCounts[trimmed] || 0) + 1;
+      }
+    });
+  });
+
+  const uniqueTags = Object.keys(tagCounts).sort();
+
+  if (uniqueTags.length === 0) {
+    tagFilterBarEl.style.display = 'none';
+    selectedTagFilter = 'ALL';
+    return;
+  }
+  tagFilterBarEl.style.display = 'flex';
+
+  if (selectedTagFilter !== 'ALL' && !uniqueTags.includes(selectedTagFilter)) {
+    selectedTagFilter = 'ALL';
+  }
+
+  // 「すべて」ボタン
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  allBtn.className = `tag-btn ${selectedTagFilter === 'ALL' ? 'active' : ''}`;
+  allBtn.textContent = `すべて (${decks.length})`;
+  allBtn.onclick = () => setTagFilter('ALL');
+  tagFilterBarEl.appendChild(allBtn);
+
+  // 各タグボタン
+  uniqueTags.forEach(tag => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isActive = (selectedTagFilter === tag);
+    btn.className = `tag-btn ${isActive ? 'active' : ''}`;
+    const color = getTagColor(tag);
+    
+    if (!isActive) {
+      btn.style.borderColor = color;
+      btn.style.color = color;
+    } else {
+      btn.style.backgroundColor = color;
+      btn.style.borderColor = color;
+    }
+
+    btn.innerHTML = `<span class="tag-color-dot" style="background-color: ${color};"></span>${tag} (${tagCounts[tag]})`;
+    btn.onclick = () => setTagFilter(tag);
+    tagFilterBarEl.appendChild(btn);
+  });
+}
 
 function renderMenu() {
   if (!deckListEl) return;
+  renderTagFilterBar();
   deckListEl.innerHTML = '';
   const now = Date.now();
 
@@ -1872,6 +1981,15 @@ function renderMenu() {
   let sortedDecks = [...decks];
   if (userConfig.deckSortOrder === 'RECENT') {
     sortedDecks.sort((a, b) => (b.lastStudied || 0) - (a.lastStudied || 0));
+  }
+
+  if (userConfig.enableTags && selectedTagFilter !== 'ALL') {
+    sortedDecks = sortedDecks.filter(d => Array.isArray(d.tags) && d.tags.includes(selectedTagFilter));
+  }
+
+  if (sortedDecks.length === 0) {
+    deckListEl.innerHTML = `<div class="empty-deck-notice"><p>タグ「${selectedTagFilter}」が付いたデッキはありません。</p></div>`;
+    return;
   }
 
   sortedDecks.forEach(deck => {
@@ -1889,6 +2007,14 @@ function renderMenu() {
     if (deck.orderMode === 'ORDER') orderModeText = '順番順';
     if (deck.orderMode === 'WEAK') orderModeText = '苦手特化';
 
+    let tagsHtml = '';
+    if (userConfig.enableTags && Array.isArray(deck.tags) && deck.tags.length > 0) {
+      tagsHtml = deck.tags.map(t => {
+        const color = getTagColor(t);
+        return `<span class="deck-tag-badge" style="border-color: ${color}; color: ${color};">${t}</span>`;
+      }).join(' ');
+    }
+
     const cardEl = document.createElement('div'); 
     cardEl.className = 'deck-card';
     cardEl.innerHTML = `
@@ -1897,9 +2023,10 @@ function renderMenu() {
         <span class="deck-retention">定着率: ${retentionRate}%</span>
       </div>
       <div class="deck-count">総カード: ${(deck.cards || []).length}枚 / 出題対象: ${dueCount}枚</div>
-      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; align-items: center;">
         <span class="deck-mode-badge" style="margin-bottom:0;">出題順: ${orderModeText}</span>
         ${deck.excludeStar ? `<span class="deck-mode-badge" style="margin-bottom:0; color:#8b5cf6; border-color:#8b5cf6;">★除外中</span>` : ''}
+        ${tagsHtml}
       </div>
       <div class="deck-manage-btns">
         <button type="button" class="btn-small" onclick="openDeckSettingsModal('${deck.id}')">⚙ デッキ設定</button>
@@ -1915,12 +2042,89 @@ function renderMenu() {
   });
 }
 
+/* --- デッキ設定内のタグチェックボックス管理 --- */
+let currentEditingDeckTags = [];
+
+function getAllExistingTags() {
+  const tagSet = new Set();
+  decks.forEach(d => {
+    (d.tags || []).forEach(t => {
+      const trimmed = t.trim();
+      if (trimmed) tagSet.add(trimmed);
+    });
+  });
+  if (userConfig.tagColors) {
+    Object.keys(userConfig.tagColors).forEach(t => {
+      const trimmed = t.trim();
+      if (trimmed) tagSet.add(trimmed);
+    });
+  }
+  return Array.from(tagSet).sort();
+}
+
+function renderDeckTagsCheckboxList(deck) {
+  if (!deckTagsCheckboxContainer) return;
+  deckTagsCheckboxContainer.innerHTML = '';
+  
+  if (deck) {
+    currentEditingDeckTags = [...(deck.tags || [])];
+  }
+
+  const allTags = getAllExistingTags();
+  
+  if (allTags.length === 0) {
+    deckTagsCheckboxContainer.innerHTML = '<span style="font-size: 0.85em; color: var(--text-sub);">登録されているタグがありません。「＋ 新規タグを作成」から追加してください。</span>';
+    return;
+  }
+
+  allTags.forEach(tag => {
+    const isChecked = currentEditingDeckTags.includes(tag);
+    const color = getTagColor(tag);
+    
+    const label = document.createElement('label');
+    label.className = `tag-checkbox-label ${isChecked ? 'checked' : ''}`;
+    
+    if (isChecked) {
+      label.style.backgroundColor = color;
+      label.style.borderColor = color;
+      label.style.color = '#ffffff';
+    } else {
+      label.style.backgroundColor = 'var(--bg-color)';
+      label.style.borderColor = 'var(--card-border)';
+      label.style.color = 'var(--text-main)';
+    }
+
+    label.innerHTML = `
+      <input type="checkbox" value="${tag}" ${isChecked ? 'checked' : ''} onchange="toggleDeckTagSelection(this, '${tag}')">
+      <span class="tag-color-dot" style="background-color: ${isChecked ? '#ffffff' : color};"></span>${tag}
+    `;
+    deckTagsCheckboxContainer.appendChild(label);
+  });
+}
+
+function toggleDeckTagSelection(checkboxElem, tag) {
+  if (checkboxElem.checked) {
+    if (!currentEditingDeckTags.includes(tag)) {
+      currentEditingDeckTags.push(tag);
+    }
+  } else {
+    currentEditingDeckTags = currentEditingDeckTags.filter(t => t !== tag);
+  }
+  renderDeckTagsCheckboxList();
+}
+
 function openDeckSettingsModal(deckId) {
   targetDeckForSettings = deckId;
   const deck = decks.find(d => d.id === deckId);
   if (!deck) return;
   if (deckSettingsTitle) deckSettingsTitle.textContent = `デッキ: ${deck.title}`;
   
+  if (deckTagsSettingRow) {
+    deckTagsSettingRow.style.display = userConfig.enableTags ? 'flex' : 'none';
+  }
+  
+  renderDeckTagsCheckboxList(deck);
+
   const currentMode = deck.orderMode || 'SHUFFLE';
   const radio = document.querySelector(`input[name="deck-order-option"][value="${currentMode}"]`);
   if (radio) radio.checked = true;
@@ -1941,6 +2145,10 @@ function submitDeckSettings() {
   const deck = decks.find(d => d.id === targetDeckForSettings);
   if (!deck) return;
 
+  if (deckTagsSettingRow && userConfig.enableTags) {
+    deck.tags = [...currentEditingDeckTags];
+  }
+
   const selectedRadio = document.querySelector('input[name="deck-order-option"]:checked');
   if (selectedRadio) deck.orderMode = selectedRadio.value;
 
@@ -1952,6 +2160,133 @@ function submitDeckSettings() {
   closeDeckSettingsModal();
 }
 
+/* --- 新規タグ作成モーダル制御 --- */
+function openNewTagModal() {
+  if (newTagNameInput) newTagNameInput.value = '';
+  if (newTagColorInput) newTagColorInput.value = '#2563eb';
+  if (newTagModal) newTagModal.classList.remove('hidden');
+  if (newTagNameInput) {
+    setTimeout(() => newTagNameInput.focus(), 50);
+  }
+}
+
+function closeNewTagModal() {
+  if (newTagModal) newTagModal.classList.add('hidden');
+}
+
+function submitNewTag() {
+  if (!newTagNameInput || !newTagColorInput) return;
+  const tagName = newTagNameInput.value.trim();
+  const tagColor = newTagColorInput.value;
+
+  if (!tagName) {
+    alert('タグ名を入力してください。');
+    return;
+  }
+
+  if (!userConfig.tagColors) userConfig.tagColors = {};
+  userConfig.tagColors[tagName] = tagColor;
+  saveConfig();
+
+  if (!currentEditingDeckTags.includes(tagName)) {
+    currentEditingDeckTags.push(tagName);
+  }
+
+  renderDeckTagsCheckboxList();
+
+  const tagManagerModalEl = document.getElementById('tag-manager-modal');
+  if (tagManagerModalEl && !tagManagerModalEl.classList.contains('hidden')) {
+    renderTagManagerList();
+  }
+
+  closeNewTagModal();
+}
+
+/* --- タグ色・名前マネージャーモーダル制御 --- */
+function openTagManagerModal() {
+  renderTagManagerList();
+  if (tagManagerModal) tagManagerModal.classList.remove('hidden');
+}
+
+function closeTagManagerModal() {
+  if (tagManagerModal) tagManagerModal.classList.add('hidden');
+  renderMenu();
+}
+
+function renderTagManagerList() {
+  const container = document.getElementById('tag-manager-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const allTags = getAllExistingTags();
+  if (allTags.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--text-sub); font-size:0.85em;">現在登録されているタグはありません。</div>';
+    return;
+  }
+
+  allTags.forEach(tag => {
+    const color = getTagColor(tag);
+    const row = document.createElement('div');
+    row.className = 'tag-manager-row';
+    row.innerHTML = `
+      <div class="tag-manager-left">
+        <input type="color" class="tag-color-input" value="${color}" onchange="updateTagColor('${tag}', this.value)">
+        <span style="font-weight:bold; font-size:0.9em; color:var(--text-main);">${tag}</span>
+      </div>
+      <div style="display: flex; gap: 4px;">
+        <button type="button" class="btn-small" onclick="renameTagPrompt('${tag}')">名前変更</button>
+        <button type="button" class="btn-small btn-small-danger" onclick="deleteTagUniversal('${tag}')">タグ解除</button>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function updateTagColor(tag, newColor) {
+  if (!userConfig.tagColors) userConfig.tagColors = {};
+  userConfig.tagColors[tag] = newColor;
+  saveConfig();
+}
+
+function renameTagPrompt(oldTag) {
+  const newTag = prompt(`タグ「${oldTag}」の新しい名前を入力してください:`, oldTag);
+  if (!newTag || !newTag.trim() || newTag.trim() === oldTag) return;
+  const cleaned = newTag.trim();
+
+  decks.forEach(d => {
+    if (Array.isArray(d.tags)) {
+      d.tags = d.tags.map(t => (t === oldTag ? cleaned : t));
+    }
+  });
+
+  if (userConfig.tagColors && userConfig.tagColors[oldTag]) {
+    userConfig.tagColors[cleaned] = userConfig.tagColors[oldTag];
+    delete userConfig.tagColors[oldTag];
+    saveConfig();
+  }
+
+  saveDecks();
+  renderTagManagerList();
+}
+
+function deleteTagUniversal(targetTag) {
+  if (!confirm(`すべてのデッキからタグ「${targetTag}」を解除しますか？`)) return;
+
+  decks.forEach(d => {
+    if (Array.isArray(d.tags)) {
+      d.tags = d.tags.filter(t => t !== targetTag);
+    }
+  });
+
+  if (userConfig.tagColors && userConfig.tagColors[targetTag]) {
+    delete userConfig.tagColors[targetTag];
+    saveConfig();
+  }
+
+  saveDecks();
+  renderTagManagerList();
+}
+
 function showNewDeckModal() {
   const title = prompt('新しいデッキ名を入力してください:');
   if (title && title.trim()) {
@@ -1960,6 +2295,7 @@ function showNewDeckModal() {
       decks.push({
         id: 'deck-' + Date.now(), 
         title: cleanedTitle, 
+        tags: [],
         orderMode: 'SHUFFLE', 
         excludeStar: false,
         lastStudied: Date.now(), 
@@ -2082,8 +2418,18 @@ function clearAllTrash() {
 }
 
 /* =====================================================================
- * 13. カード個別編集・追加・リストモーダル
+ * 13. カード個別編集・追加・リストモーダル & ' ' 消去機能
  * ===================================================================== */
+
+function cleanCardEditQuotes() {
+  const cleanStr = (s) => {
+    if (!s) return '';
+    return s.trim().replace(/^['"']+|['"']+$/g, '').trim();
+  };
+  if (editCardQ) editCardQ.value = cleanStr(editCardQ.value);
+  if (editCardA) editCardA.value = cleanStr(editCardA.value);
+  if (editCardExp) editCardExp.value = cleanStr(editCardExp.value);
+}
 
 function openAddCardModal(deckId) {
   targetDeckForAddCard = deckId;
@@ -2306,6 +2652,7 @@ function submitCsvImport() {
     const newDeck = {
       id: 'deck-' + Date.now(),
       title: titleInput,
+      tags: [],
       orderMode: 'SHUFFLE',
       excludeStar: false,
       lastStudied: Date.now(),
@@ -2405,12 +2752,11 @@ function setupDragAndDrop() {
  * 15. クイズ学習ロジック & リザルト機能
  * ===================================================================== */
 
-// 新規追加：現在のレベルを数値（0〜11）として取得するヘルパー関数
 function getNumericLevelInfo(card) {
   if (!card) return 0;
   const val = card.interval || 0, reps = card.reps || 0, dueDate = card.dueDate || 0;
-  if (val === 0 && reps === 0 && dueDate === 0) return 0; // 未学習
-  if (val >= 30) return 11; // ★
+  if (val === 0 && reps === 0 && dueDate === 0) return 0;
+  if (val >= 30) return 11;
   if (val >= 21) return 10;
   if (val >= 14) return 9;
   if (val >= 10) return 8;
@@ -2423,9 +2769,8 @@ function getNumericLevelInfo(card) {
   return 1;
 }
 
-// 新規追加：指定したレベルに必要な最小の復習間隔（interval）を逆算する関数
 function getIntervalForNumericLevel(level) {
-  if (level <= 1) return 0;
+  if (level <= 1) return 0.1;
   if (level === 2) return 0.5;
   if (level === 3) return 1;
   if (level === 4) return 2;
@@ -2435,20 +2780,17 @@ function getIntervalForNumericLevel(level) {
   if (level === 8) return 10;
   if (level === 9) return 14;
   if (level === 10) return 21;
-  return 30; // 11(★)以上
+  return 30;
 }
 
-// 既存の calculateNextReview を置き換え
 function calculateNextReview(card, rating) {
   const now = Date.now();
   const ONE_MINUTE = 60 * 1000, ONE_HOUR = 60 * ONE_MINUTE, ONE_DAY = 24 * ONE_HOUR;
   let nextInterval = card.interval, ease = card.easeFactor, reps = card.reps, nextDueDate = now;
 
-  // 現在のレベルを数値で取得
   const currentLevel = getNumericLevelInfo(card);
   let nextLevel = currentLevel;
 
-  // 連続「もう一度」判定用のカウンターを初期化（存在しない場合）
   if (card.againStreak === undefined) {
     card.againStreak = 0;
   }
@@ -2456,45 +2798,35 @@ function calculateNextReview(card, rating) {
   switch (rating) {
     case 'again': 
       if (currentLevel === 0) {
-        // 【仕様】初出のカードは強制的にレベル1
         nextLevel = 1;
       } else {
         if (card.againStreak >= 1) {
-          // 【仕様】連続でもう一度ならば3下がる (下限は1)
           nextLevel = Math.max(1, currentLevel - 3);
         } else {
-          // 【仕様】1回目は暗記レベルが2下がる (下限は1)
           nextLevel = Math.max(1, currentLevel - 2);
         }
       }
-      card.againStreak += 1; // 連続カウントを追加
-      
-      // レベルが下がった際、次回「普通」を押した時にレベルが初期化されないよう reps を調整
-      reps = (nextLevel <= 1) ? 1 : Math.max(2, reps);
-      
+      card.againStreak += 1;
+      reps = Math.max(1, reps);
       nextInterval = getIntervalForNumericLevel(nextLevel);
       nextDueDate = now + 1 * ONE_MINUTE; 
       break;
 
     case 'hard': 
       if (currentLevel === 0) {
-        // 【仕様】初出のカードは強制的にレベル1
         nextLevel = 1;
       } else {
-        // 【仕様】難しいでは暗記レベルが1下がる (下限は1)
         nextLevel = Math.max(1, currentLevel - 1);
       }
-      card.againStreak = 0; // 他の評価を押したので連続カウントをリセット
-      
-      reps = (nextLevel <= 1) ? 1 : Math.max(2, reps);
+      card.againStreak = 0;
+      reps = Math.max(1, reps);
       nextInterval = getIntervalForNumericLevel(nextLevel);
       nextDueDate = now + 12 * ONE_HOUR; 
       ease = Math.max(1.3, ease - 0.15); 
       break;
 
     case 'good':
-      card.againStreak = 0; // 連続カウントリセット
-      // 【仕様】普通はそのまま（既存の順当にレベルが上がるロジックを維持）
+      card.againStreak = 0;
       if (reps === 0) nextInterval = 1; 
       else if (reps === 1) nextInterval = 3; 
       else nextInterval = Math.round(nextInterval * ease);
@@ -2503,8 +2835,7 @@ function calculateNextReview(card, rating) {
       break;
 
     case 'easy':
-      card.againStreak = 0; // 連続カウントリセット
-      // 【仕様】簡単はそのまま（既存の順当にレベルが大きく上がるロジックを維持）
+      card.againStreak = 0;
       if (reps === 0) nextInterval = 4; 
       else nextInterval = Math.round(nextInterval * ease * 1.3);
       reps += 1; 
@@ -2515,7 +2846,7 @@ function calculateNextReview(card, rating) {
   
   card.interval = nextInterval; 
   card.easeFactor = ease; 
-  card.reps = reps; 
+  card.reps = Math.max(1, reps);
   card.dueDate = nextDueDate;
   saveDecks();
 }
@@ -2606,7 +2937,6 @@ function loadNextCard() {
 
   const qContainer = document.querySelector('.question-container');
   if (qContainer) {
-    // 【変更】ロード直後は常に選択不可に戻す
     qContainer.classList.remove('selectable-text');
   }
 
@@ -2647,7 +2977,7 @@ function loadNextCard() {
     answerSectionEl.classList.add('hidden'); 
     answerSectionEl.classList.remove('holding-only-answer'); 
   }
-  if (resultStatsEl) resultStatsEl.classList.add('hidden');
+  if (resultStatsEl) resultStatsEl.classList.remove('hidden');
   if (buttonsEl) buttonsEl.classList.add('hidden');
 
   const longPressSuffix = userConfig.enableLongPress ? '（長押しで文字送り）' : '';
@@ -2766,8 +3096,8 @@ function renderHiddenCardsList() {
     cardEl.innerHTML = `
       <div class="card-item-info">
         <div class="card-item-deck-title">from ${item.deckTitle}</div>
-        <div class="card-item-q">Q. ${item.card.question}</div>
-        <div class="card-item-a">A. ${item.card.answer}</div>
+        <div class="card-item-q">${item.card.question}</div>
+        <div class="card-item-a">${item.card.answer}</div>
       </div>
       <div style="display:flex; align-items: center; flex-shrink:0;">
         <button type="button" class="btn-small" onclick="restoreSingleHiddenCardUniversal('${item.deckId}', '${item.card.id}')">再表示する</button>
@@ -2850,7 +3180,6 @@ function advanceQuizState() {
       charIndex = [...currentCard.question].length;
       state = 'ANSWERED';
 
-      // 【追加】解答表示時に、設定がONの場合のみ選択可能クラスを付与
       const qContainer = document.querySelector('.question-container');
       if (qContainer && userConfig.enableTextSelection) {
         qContainer.classList.add('selectable-text');
@@ -2870,7 +3199,6 @@ function advanceQuizState() {
     if (state === 'STOPPED') {
       state = 'ANSWERED';
 
-      // 【追加】解答表示時に、設定がONの場合のみ選択可能クラスを付与
       const qContainer = document.querySelector('.question-container');
       if (qContainer && userConfig.enableTextSelection) {
         qContainer.classList.add('selectable-text');
