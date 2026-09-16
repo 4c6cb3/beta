@@ -1348,11 +1348,8 @@ function changeTodayCardsSortOrder(order) {
 
 function getCardLevelInfo(card) {
   if (!card) return { level: 0, score: 0, color: '#9ca3af' };
-  let level = 1,
-    score = 0;
-  const val = card.interval || 0,
-    reps = card.reps || 0,
-    dueDate = card.dueDate || 0;
+  let level = 1, score = 0;
+  const val = card.interval || 0, reps = card.reps || 0, dueDate = card.dueDate || 0;
 
   if (val === 0 && reps === 0 && dueDate === 0) {
     level = 0;
@@ -1362,34 +1359,34 @@ function getCardLevelInfo(card) {
     score = 1.0;
   } else if (val >= 21) {
     level = 10;
-    score = 0.8;
+    score = 0.9;
   } else if (val >= 14) {
     level = 9;
-    score = 0.6;
+    score = 0.85;
   } else if (val >= 10) {
     level = 8;
-    score = 0.6;
+    score = 0.75;
   } else if (val >= 7) {
     level = 7;
-    score = 0.4;
+    score = 0.65;
   } else if (val >= 5) {
     level = 6;
-    score = 0.4;
+    score = 0.55;
   } else if (val >= 3) {
     level = 5;
-    score = 0.4;
+    score = 0.45;
   } else if (val >= 2) {
     level = 4;
-    score = 0.2;
+    score = 0.35;
   } else if (val >= 1) {
     level = 3;
-    score = 0.2;
+    score = 0.25;
   } else if (val >= 0.5) {
     level = 2;
-    score = 0;
+    score = 0.15;
   } else {
     level = 1;
-    score = 0;
+    score = 0.1; // 初回学習（もう一度でも）でスコアが反映される
   }
 
   let bg = '#9ca3af';
@@ -3166,8 +3163,8 @@ function calculateNextReview(card, rating) {
     ONE_HOUR = 60 * ONE_MINUTE,
     ONE_DAY = 24 * ONE_HOUR;
   let nextInterval = card.interval,
-    ease = card.easeFactor,
-    reps = card.reps,
+    ease = card.easeFactor || 2.5,
+    reps = card.reps || 0,
     nextDueDate = now;
 
   const currentLevel = getNumericLevelInfo(card);
@@ -3195,12 +3192,12 @@ function calculateNextReview(card, rating) {
       break;
 
     case 'hard':
+      card.againStreak = 0;
       if (currentLevel === 0) {
         nextLevel = 1;
       } else {
         nextLevel = Math.max(1, currentLevel - 1);
       }
-      card.againStreak = 0;
       reps = Math.max(1, reps);
       nextInterval = getIntervalForNumericLevel(nextLevel);
       nextDueDate = now + 12 * ONE_HOUR;
@@ -3209,27 +3206,30 @@ function calculateNextReview(card, rating) {
 
     case 'good':
       card.againStreak = 0;
-      // Hard後などでintervalが1日未満（0.1〜0.5日）に落ちている場合は、ペナルティを維持して1日から再開する
-      if (reps === 0 || card.interval < 1) {
-        nextInterval = 1;
-      } else if (reps === 1) {
-        nextInterval = 3;
+      if (currentLevel === 0) {
+        nextLevel = 3; // 初回Good: 1日後 (Lv.3)
       } else {
-        nextInterval = Math.round(nextInterval * ease);
+        nextLevel = Math.min(11, currentLevel + 1); // 確実に+1段階アップ（Hard後のペナルティを維持）
       }
       reps += 1;
+      nextInterval = getIntervalForNumericLevel(nextLevel);
       nextDueDate = now + nextInterval * ONE_DAY;
       break;
 
     case 'easy':
       card.againStreak = 0;
-      // Easy評価の2回目ロジック（欠損していた分岐を追加し、肥大化を防止）
-      if (reps === 0) {
+      if (currentLevel === 0) {
+        nextLevel = 4; // 初回Easy: 4日 (Lv.4)
         nextInterval = 4;
-      } else if (reps === 1) {
-        nextInterval = 3;
+      } else if (currentLevel <= 4) {
+        nextLevel = 8; // 2回目Easy: 10日 (Lv.8)
+        nextInterval = 10;
+      } else if (currentLevel <= 8) {
+        nextLevel = 10; // 3回目Easy: 21日 (Lv.10)
+        nextInterval = 21;
       } else {
-        nextInterval = Math.round(nextInterval * ease * 1.3);
+        nextLevel = 11; // 4回目以降: 30日 (Lv.★)
+        nextInterval = 30;
       }
       reps += 1;
       ease += 0.15;
