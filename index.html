@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v3">
 </head>
 <body class="theme-device">
   <div class="container">
@@ -852,7 +852,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
+        navigator.serviceWorker.register('./sw.js?v=3')
           .then((registration) => {
             console.log('[Service Worker] 登録が成功しました:', registration.scope);
           })
@@ -862,6 +862,6 @@
       });
     }
   </script>
-  <script src="app.js"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

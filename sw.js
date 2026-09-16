@@ -1,27 +1,24 @@
 /**
  * =====================================================================
  * memoly - サービスワーカー (sw.js)
- * オフライン動作のためのファイルキャッシュと自動更新を管理
  * ===================================================================== */
 
-// キャッシュバージョンを上げて古いキャッシュを一掃
-const CACHE_NAME = 'memoly-cache-v2.1.0-202609161905';
+const CACHE_NAME = 'memoly-cache-v2.1.0-202609161915';
 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './style.css',
-  './app.js'
+  './style.css?v=3',
+  './app.js?v=3'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] 新しいキャッシュを保存しています:', CACHE_NAME);
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  self.skipWaiting();
+  self.skipWaiting(); // すぐに新しいService Workerを起動
 });
 
 self.addEventListener('activate', (event) => {
@@ -30,8 +27,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('[Service Worker] 古いキャッシュを削除しました:', cacheName);
-            return caches.delete(cacheName);
+            return caches.delete(cacheName); // 古いキャッシュを確実に削除
           }
         })
       );
@@ -41,17 +37,22 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // HTTP/HTTPS 以外のリクエスト（拡張機能など）やGET以外の通信はキャッシュを通さない（エラー防止）
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // ネットワーク通信が成功したら、最新のデータをキャッシュに保存して返す
+        // ネットワークから取得成功したら、それをキャッシュに保存して返す（常に最新を保つ）
         return caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, networkResponse.clone());
           return networkResponse;
         });
       })
       .catch(() => {
-        // オフラインなどで通信に失敗した場合のみ、キャッシュを返す
+        // オフライン時のみキャッシュから返す
         return caches.match(event.request);
       })
   );
