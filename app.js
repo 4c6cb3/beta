@@ -1348,8 +1348,11 @@ function changeTodayCardsSortOrder(order) {
 
 function getCardLevelInfo(card) {
   if (!card) return { level: 0, score: 0, color: '#9ca3af' };
-  let level = 1, score = 0;
-  const val = card.interval || 0, reps = card.reps || 0, dueDate = card.dueDate || 0;
+  let level = 1,
+    score = 0;
+  const val = card.interval || 0,
+    reps = card.reps || 0,
+    dueDate = card.dueDate || 0;
 
   if (val === 0 && reps === 0 && dueDate === 0) {
     level = 0;
@@ -1359,34 +1362,34 @@ function getCardLevelInfo(card) {
     score = 1.0;
   } else if (val >= 21) {
     level = 10;
-    score = 0.9;
+    score = 0.8;
   } else if (val >= 14) {
     level = 9;
-    score = 0.85;
+    score = 0.6;
   } else if (val >= 10) {
     level = 8;
-    score = 0.75;
+    score = 0.6;
   } else if (val >= 7) {
     level = 7;
-    score = 0.65;
+    score = 0.4;
   } else if (val >= 5) {
     level = 6;
-    score = 0.55;
+    score = 0.4;
   } else if (val >= 3) {
     level = 5;
-    score = 0.45;
+    score = 0.4;
   } else if (val >= 2) {
     level = 4;
-    score = 0.35;
+    score = 0.2;
   } else if (val >= 1) {
     level = 3;
-    score = 0.25;
+    score = 0.2;
   } else if (val >= 0.5) {
     level = 2;
-    score = 0.15;
+    score = 0;
   } else {
     level = 1;
-    score = 0.1; // 初回学習（もう一度でも）でスコアが反映される
+    score = 0;
   }
 
   let bg = '#9ca3af';
