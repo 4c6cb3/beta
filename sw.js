@@ -4,9 +4,9 @@
  * ===================================================================== */
 
 // v6に更新してキャッシュを完全にリセット
-const CACHE_NAME = 'memoly-cache-v6';
+const CACHE_NAME = 'memoly-cache-v8';
 
-const ASSETS_TO_CACHE = ['./', './index.html', './style.css?v=7', './app.js?v=7'];
+const ASSETS_TO_CACHE = ['./', './index.html', './style.css?v=8', './app.js?v=8'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
