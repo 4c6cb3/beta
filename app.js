@@ -1,6 +1,7 @@
 /**
  * =====================================================================
- * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.2.1.0
+ * memoly - 暗記フラッシュカード・早押しクイズアプリ (app.js) - ver.2.2.0
+ * Part 1 / 2
  * ===================================================================== */
 
 /* =====================================================================
@@ -73,6 +74,7 @@ const DEFAULT_USER_CONFIG = {
   enableTextSelection: false,
   enableTags: false,
   tagColors: {},
+  enableShowFullQuestionBtn: false, // 【新機能】問題文全文表示ボタン（デフォルトOFF）
   keyBinds: { ...DEFAULT_KEY_BINDS }
 };
 
@@ -149,6 +151,7 @@ let redoStack = [];
 let currentCalendarDate = new Date();
 let selectedCalendarDateStr = '';
 let cardListPageIndex = 0;
+let cardListSortOrder = 'DEFAULT'; // 【新機能】カード一覧のソート順
 const CARDS_PER_PAGE = 100;
 
 let userConfig = { ...DEFAULT_USER_CONFIG };
@@ -219,6 +222,9 @@ let menuScreen,
   trashListContainer,
   hiddenCardsModal,
   hiddenCardsListContainer,
+  starCardsModal,
+  starCardsListContainer,
+  starCardsModalCount,
   csvConfirmModal,
   csvDeckNameInput,
   csvConfirmCardCount,
@@ -263,6 +269,7 @@ let menuScreen,
   editCardQ,
   editCardA,
   editCardExp,
+  editCardIsHidden,
   addCardImgInput,
   addCardImgPreview,
   addCardImgElement,
@@ -278,11 +285,13 @@ let menuScreen,
   cardListDeckTitle,
   cardListContainer,
   cardPaginationEl,
+  cardListSortSelect,
   deckSettingsTitle,
   deckTagsCheckboxContainer,
   deckTagsSettingRow,
   undoBtn,
-  redoBtn;
+  redoBtn,
+  fullQuestionBtn;
 
 function initDOMElements() {
   menuScreen = document.getElementById('menu-screen');
@@ -309,6 +318,9 @@ function initDOMElements() {
   trashListContainer = document.getElementById('trash-list-container');
   hiddenCardsModal = document.getElementById('hidden-cards-modal');
   hiddenCardsListContainer = document.getElementById('hidden-cards-list-container');
+  starCardsModal = document.getElementById('star-cards-modal');
+  starCardsListContainer = document.getElementById('star-cards-list-container');
+  starCardsModalCount = document.getElementById('star-cards-modal-count');
 
   csvConfirmModal = document.getElementById('csv-confirm-modal');
   csvDeckNameInput = document.getElementById('csv-deck-name-input');
@@ -367,6 +379,7 @@ function initDOMElements() {
   editCardQ = document.getElementById('edit-card-q');
   editCardA = document.getElementById('edit-card-a');
   editCardExp = document.getElementById('edit-card-exp');
+  editCardIsHidden = document.getElementById('edit-card-is-hidden');
   editCardImgInput = document.getElementById('edit-card-img-input');
   editCardImgPreview = document.getElementById('edit-card-img-preview');
   editCardImgElement = document.getElementById('edit-card-img-element');
@@ -382,12 +395,14 @@ function initDOMElements() {
   cardListDeckTitle = document.getElementById('card-list-deck-title');
   cardListContainer = document.getElementById('card-list-container');
   cardPaginationEl = document.getElementById('card-pagination');
+  cardListSortSelect = document.getElementById('card-list-sort-select');
   deckSettingsTitle = document.getElementById('deck-settings-title');
   deckTagsCheckboxContainer = document.getElementById('deck-tags-checkbox-container');
   deckTagsSettingRow = document.getElementById('deck-tags-setting-row');
 
   undoBtn = document.getElementById('undo-btn');
   redoBtn = document.getElementById('redo-btn');
+  fullQuestionBtn = document.getElementById('full-question-btn');
 }
 
 /* =====================================================================
@@ -834,6 +849,7 @@ async function initApp() {
       if (userConfig.dailyGoalMinutes === undefined) userConfig.dailyGoalMinutes = 15;
       if (userConfig.enableTextSelection === undefined) userConfig.enableTextSelection = true;
       if (userConfig.enableTags === undefined) userConfig.enableTags = true;
+      if (userConfig.enableShowFullQuestionBtn === undefined) userConfig.enableShowFullQuestionBtn = false;
       if (!userConfig.tagColors) userConfig.tagColors = {};
       if (!userConfig.keyBinds) userConfig.keyBinds = JSON.parse(JSON.stringify(DEFAULT_KEY_BINDS));
     }
@@ -850,7 +866,7 @@ async function initApp() {
         if (!Array.isArray(d.cards)) d.cards = [];
         d.cards.forEach((c) => {
           if (c.isHidden === undefined) c.isHidden = false;
-          if (c.againStreak === undefined) c.againStreak = 0; // againStreak初期化
+          if (c.againStreak === undefined) c.againStreak = 0;
         });
       });
     } else {
@@ -875,6 +891,22 @@ async function initApp() {
 
     const savedAch = await idbGet('memoly_user_achievements');
     if (savedAch && typeof savedAch === 'object') userAchievements = savedAch;
+
+    let migratedCount = 0;
+    decks.forEach((deck) => {
+      (deck.cards || []).forEach((c) => {
+        if ((c.interval || 0) === 0 && (c.reps || 0) === 0 && (c.dueDate || 0) === 0) {
+          if (hasCardEverBeenStudied(c)) {
+            c.reps = 1;
+            c.interval = 0.1;
+            migratedCount++;
+          }
+        }
+      });
+    });
+    if (migratedCount > 0) {
+      saveDecks();
+    }
 
     updateUserLevelFromExp();
     checkRetroactiveAchievements();
@@ -1059,6 +1091,17 @@ function applyConfigUI() {
 
   const cbEnableTags = document.getElementById('toggle-enable-tags');
   if (cbEnableTags) cbEnableTags.checked = !!userConfig.enableTags;
+
+  const cbShowFullQ = document.getElementById('toggle-show-full-q-btn');
+  if (cbShowFullQ) cbShowFullQ.checked = !!userConfig.enableShowFullQuestionBtn;
+
+  if (fullQuestionBtn) {
+    if (userConfig.enableShowFullQuestionBtn) {
+      fullQuestionBtn.classList.remove('hidden');
+    } else {
+      fullQuestionBtn.classList.add('hidden');
+    }
+  }
 
   const tagManageBtnCont = document.getElementById('tag-management-btn-container');
   if (tagManageBtnCont) {
@@ -1354,7 +1397,8 @@ function getCardLevelInfo(card) {
     reps = card.reps || 0,
     dueDate = card.dueDate || 0;
 
-  if (val === 0 && reps === 0 && dueDate === 0) {
+  // 【修正】一度も学習したことがないカードのみを Lv.0 とする
+  if (val === 0 && reps === 0 && dueDate === 0 && !hasCardEverBeenStudied(card)) {
     level = 0;
     score = 0;
   } else if (val >= 30) {
@@ -1940,6 +1984,12 @@ function toggleEnableTagsOption(enabled) {
   applyConfigUI();
 }
 
+function toggleShowFullQuestionBtnOption(enabled) {
+  userConfig.enableShowFullQuestionBtn = enabled;
+  saveConfig();
+  applyConfigUI();
+}
+
 function startPreviewTyping() {
   clearInterval(previewTimer);
   if (!previewTextContainer) return;
@@ -2301,7 +2351,6 @@ function renderMenu() {
   });
 }
 
-/* --- デッキ設定内のタグチェックボックス管理 --- */
 let currentEditingDeckTags = [];
 
 function getAllExistingTags() {
@@ -2420,7 +2469,6 @@ function submitDeckSettings() {
   closeDeckSettingsModal();
 }
 
-/* --- 新規タグ作成モーダル制御 --- */
 function openNewTagModal() {
   if (newTagNameInput) newTagNameInput.value = '';
   if (newTagColorInput) newTagColorInput.value = '#2563eb';
@@ -2462,7 +2510,6 @@ function submitNewTag() {
   closeNewTagModal();
 }
 
-/* --- タグ色・名前マネージャーモーダル制御 --- */
 function openTagManagerModal() {
   renderTagManagerList();
   if (tagManagerModal) tagManagerModal.classList.remove('hidden');
@@ -2596,7 +2643,7 @@ function resetDeckProgress(deckId) {
       card.interval = 0;
       card.easeFactor = 2.5;
       card.reps = 0;
-      card.againStreak = 0; // 進捗リセット時にagainStreakも確実にリセット
+      card.againStreak = 0;
     });
     saveDecks();
     renderMenu();
@@ -2710,24 +2757,17 @@ function clearAllTrash() {
 
 function cleanTextSurroundingSpacesAndQuotes(str) {
   if (!str) return '';
-
-  // 日本語（漢字、ひらがな、カタカナ、全角記号・句読点）の正規表現範囲
   const jp = '[\\u3040-\\u309F\\u30A0-\\u30FF\\u4E00-\\u9FFF\\u3000-\\u303F\\uFF00-\\uFFEF]';
-  // 改行コード（\r, \n）を除いた空白文字（半角スペース、全角スペース、水平タブ）
   const spaceOnly = '[ \\u3000\\t]';
 
   return str
-    // 1. 各行の行頭・行末の不要な空白を除去しつつ改行は維持
     .split('\n')
     .map((line) => {
       return line
         .trim()
-        // 日本語と日本語の間にある半角・全角スペースのみを除去（改行は影響を受けない）
         .replace(new RegExp(`(${jp})${spaceOnly}+(${jp})`, 'g'), '$1$2')
         .replace(new RegExp(`(${jp})${spaceOnly}+(${jp})`, 'g'), '$1$2')
-        // 連続する複数の半角スペースを1つに統合
         .replace(/[ ]{2,}/g, ' ')
-        // 行前後の不要な引用符を除去
         .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
         .trim();
     })
@@ -2797,6 +2837,7 @@ function openEditModalForCard(card) {
   if (editCardQ) editCardQ.value = card.question;
   if (editCardA) editCardA.value = card.answer;
   if (editCardExp) editCardExp.value = card.explanation || '';
+  if (editCardIsHidden) editCardIsHidden.checked = !!card.isHidden;
   if (editCardImgInput) editCardImgInput.value = '';
   currentEditingImageData = card.image || '';
 
@@ -2844,6 +2885,9 @@ function submitEditCard() {
   targetCardForEdit.answer = a;
   targetCardForEdit.explanation = exp;
   targetCardForEdit.image = currentEditingImageData;
+  if (editCardIsHidden) {
+    targetCardForEdit.isHidden = editCardIsHidden.checked;
+  }
   saveDecks();
 
   if (currentCard && currentCard.id === targetCardForEdit.id) {
@@ -2868,6 +2912,8 @@ function submitEditCard() {
 function openCardListModal(deckId) {
   targetDeckForCardList = deckId;
   cardListPageIndex = 0;
+  cardListSortOrder = 'DEFAULT';
+  if (cardListSortSelect) cardListSortSelect.value = 'DEFAULT';
   const deck = decks.find((d) => d.id === deckId);
   if (!deck) return;
   if (cardListDeckTitle) cardListDeckTitle.textContent = `カード一覧: ${deck.title}`;
@@ -2880,6 +2926,13 @@ function closeCardListModal() {
   targetDeckForCardList = null;
 }
 
+function changeCardListSortOrder(order) {
+  cardListSortOrder = order;
+  cardListPageIndex = 0;
+  renderCardList();
+  if (cardListContainer) cardListContainer.scrollTop = 0;
+}
+
 function changeCardListPage(direction) {
   const deck = decks.find((d) => d.id === targetDeckForCardList);
   if (!deck) return;
@@ -2889,40 +2942,84 @@ function changeCardListPage(direction) {
   if (cardListPageIndex < 0) cardListPageIndex = 0;
   if (cardListPageIndex >= totalPages) cardListPageIndex = totalPages - 1;
   renderCardList();
+  if (cardListContainer) cardListContainer.scrollTop = 0;
+}
+
+function getCardTotalAgainCount(cardId) {
+  let count = 0;
+  Object.values(dailyStudyHistory).forEach((dayData) => {
+    if (dayData && dayData[cardId] && typeof dayData[cardId].againCount === 'number') {
+      count += dayData[cardId].againCount;
+    }
+  });
+  return count;
 }
 
 function renderCardList() {
   const deck = decks.find((d) => d.id === targetDeckForCardList);
   if (!deck || !cardListContainer) return;
   cardListContainer.innerHTML = '';
-  const cards = deck.cards || [];
-  if (cards.length === 0) {
+
+  const rawCards = deck.cards || [];
+  if (rawCards.length === 0) {
     cardListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-sub);">カードがありません。</div>`;
     if (cardPaginationEl) cardPaginationEl.innerHTML = '';
     return;
   }
-  const totalPages = Math.ceil(cards.length / CARDS_PER_PAGE);
+
+  // 元のデッキ内の「登録番号 (1始まり)」を保持した配列を作成
+  let cardsWithIndex = rawCards.map((card, idx) => ({
+    card: card,
+    originalIndex: idx + 1
+  }));
+
+  // 並び替えロジック
+  if (cardListSortOrder === 'LEVEL_DESC') {
+    // 暗記レベルが高い順 (同レベルの場合は登録順)
+    cardsWithIndex.sort((a, b) => {
+      const diff = getNumericLevelInfo(b.card) - getNumericLevelInfo(a.card);
+      return diff !== 0 ? diff : a.originalIndex - b.originalIndex;
+    });
+  } else if (cardListSortOrder === 'LEVEL_ASC') {
+    // 暗記レベルが低い順 (Lv.0 → Lv.1 → Lv.2 ... の順に正確に整列)
+    cardsWithIndex.sort((a, b) => {
+      const diff = getNumericLevelInfo(a.card) - getNumericLevelInfo(b.card);
+      return diff !== 0 ? diff : a.originalIndex - b.originalIndex;
+    });
+  } else if (cardListSortOrder === 'AGAIN_DESC') {
+    // 「もう一度」が多い順 (同回数の場合は登録順)
+    cardsWithIndex.sort((a, b) => {
+      const diff = getCardTotalAgainCount(b.card.id) - getCardTotalAgainCount(a.card.id);
+      return diff !== 0 ? diff : a.originalIndex - b.originalIndex;
+    });
+  }
+
+  const totalPages = Math.ceil(cardsWithIndex.length / CARDS_PER_PAGE);
   if (cardListPageIndex >= totalPages) cardListPageIndex = totalPages - 1;
   const startIdx = cardListPageIndex * CARDS_PER_PAGE;
-  const pageCards = cards.slice(startIdx, startIdx + CARDS_PER_PAGE);
+  const pageItems = cardsWithIndex.slice(startIdx, startIdx + CARDS_PER_PAGE);
 
-  pageCards.forEach((card, idx) => {
-    const absoluteIndex = startIdx + idx + 1;
+  pageItems.forEach((item) => {
+    const card = item.card;
     let levelBadgeHtml = '';
     if (userConfig.enableCardLevel) {
       const lvInfo = getCardLevelInfo(card);
       levelBadgeHtml = `<div style="background-color: ${lvInfo.color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em; font-weight: bold;">Lv.${lvInfo.level}</div>`;
     }
 
+    const againCount = getCardTotalAgainCount(card.id);
+
     const cardEl = document.createElement('div');
     cardEl.className = 'card-item';
     cardEl.innerHTML = `
       <div class="card-item-info">
-        <div class="card-item-q">${absoluteIndex}. Q. ${card.question}</div>
+        <!-- 登録順ベースの固有番号を表示 -->
+        <div class="card-item-q">${item.originalIndex}. Q. ${card.question}</div>
         <div class="card-item-a">A. ${card.answer}</div>
         ${card.explanation ? `<div class="card-item-exp">解説: ${card.explanation}</div>` : ''}
         ${card.image ? `<div class="card-item-img-badge">📷 画像あり</div>` : ''}
         ${card.isHidden ? `<div style="font-size:0.75em; color:#ef4444; font-weight:bold;">※非表示中</div>` : ''}
+        ${againCount > 0 ? `<div style="font-size:0.75em; color:#f97316; font-weight:bold;">累計「もう一度」: ${againCount}回</div>` : ''}
       </div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0;">
         ${levelBadgeHtml}
@@ -2938,7 +3035,7 @@ function renderCardList() {
   if (cardPaginationEl) {
     cardPaginationEl.innerHTML = `
       <button type="button" class="btn-small" ${cardListPageIndex === 0 ? 'disabled style="opacity:0.4; cursor:default;"' : ''} onclick="changeCardListPage(-1)">← 前の100件</button>
-      <span>${cardListPageIndex + 1} / ${totalPages} ページ (${cards.length}枚中)</span>
+      <span>${cardListPageIndex + 1} / ${totalPages} ページ (${rawCards.length}枚中)</span>
       <button type="button" class="btn-small" ${cardListPageIndex >= totalPages - 1 ? 'disabled style="opacity:0.4; cursor:default;"' : ''} onclick="changeCardListPage(1)">次の100件 →</button>
     `;
   }
@@ -3134,12 +3231,35 @@ function setupDragAndDrop() {
  * 15. クイズ学習ロジック & リザルト機能
  * ===================================================================== */
 
+// 過去に1回でも学習したことがあるかを判定する関数
+function hasCardEverBeenStudied(card) {
+  if (!card) return false;
+  // reps や dueDate が進んでいれば学習済み
+  if ((card.reps && card.reps > 0) || (card.dueDate && card.dueDate > 0)) return true;
+  // 端末内の学習履歴に存在する場合（totalCountまたはagainCountが1以上）も学習済み
+  if (typeof dailyStudyHistory === 'object') {
+    for (const dateKey in dailyStudyHistory) {
+      const dayData = dailyStudyHistory[dateKey];
+      if (dayData && dayData[card.id]) {
+        if ((dayData[card.id].totalCount && dayData[card.id].totalCount > 0) ||
+            (dayData[card.id].againCount && dayData[card.id].againCount > 0)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 function getNumericLevelInfo(card) {
   if (!card) return 0;
   const val = card.interval || 0,
     reps = card.reps || 0,
     dueDate = card.dueDate || 0;
-  if (val === 0 && reps === 0 && dueDate === 0) return 0;
+
+  // 一度も学習したことがないカードのみを 0 とする
+  if (val === 0 && reps === 0 && dueDate === 0 && !hasCardEverBeenStudied(card)) return 0;
+
   if (val >= 30) return 11;
   if (val >= 21) return 10;
   if (val >= 14) return 9;
@@ -3217,9 +3337,9 @@ function calculateNextReview(card, rating) {
     case 'good':
       card.againStreak = 0;
       if (currentLevel === 0) {
-        nextLevel = 3; // 初回Good: 1日後 (Lv.3)
+        nextLevel = 3;
       } else {
-        nextLevel = Math.min(11, currentLevel + 1); // 確実に+1段階アップ（Hard後のペナルティを維持）
+        nextLevel = Math.min(11, currentLevel + 1);
       }
       reps += 1;
       nextInterval = getIntervalForNumericLevel(nextLevel);
@@ -3229,16 +3349,16 @@ function calculateNextReview(card, rating) {
     case 'easy':
       card.againStreak = 0;
       if (currentLevel === 0) {
-        nextLevel = 4; // 初回Easy: 4日 (Lv.4)
+        nextLevel = 4;
         nextInterval = 4;
       } else if (currentLevel <= 4) {
-        nextLevel = 8; // 2回目Easy: 10日 (Lv.8)
+        nextLevel = 8;
         nextInterval = 10;
       } else if (currentLevel <= 8) {
-        nextLevel = 10; // 3回目Easy: 21日 (Lv.10)
+        nextLevel = 10;
         nextInterval = 21;
       } else {
-        nextLevel = 11; // 4回目以降: 30日 (Lv.★)
+        nextLevel = 11;
         nextInterval = 30;
       }
       reps += 1;
@@ -3409,6 +3529,19 @@ function loadNextCard() {
   }
 }
 
+// 【新機能】問題文の一括全文表示
+function showFullQuestionInstantly(event) {
+  if (event) event.stopPropagation();
+  markUserActivity();
+  if (!currentCard || state === 'ANSWERED') return;
+
+  clearInterval(timer);
+  if (questionEl) questionEl.textContent = currentCard.question;
+  charIndex = [...currentCard.question].length;
+  state = 'STOPPED';
+  finishTypingUI();
+}
+
 function searchOnGoogle(event) {
   if (event) event.stopPropagation();
   markUserActivity();
@@ -3435,7 +3568,7 @@ function hideCurrentCard(event) {
 }
 
 /* =====================================================================
- * 非表示カードの管理（全デッキ・個別デッキ両対応）
+ * 16. 非表示・★カードモーダル管理
  * ===================================================================== */
 
 let hiddenCardsContext = 'ALL';
@@ -3561,6 +3694,57 @@ function restoreAllHiddenCardsUniversal() {
   }
 }
 
+// 【新機能】暗記レベル★カード一覧モーダル制御
+function openStarCardsModal() {
+  renderStarCardsList();
+  if (starCardsModal) starCardsModal.classList.remove('hidden');
+}
+
+function closeStarCardsModal() {
+  if (starCardsModal) starCardsModal.classList.add('hidden');
+}
+
+function renderStarCardsList() {
+  if (!starCardsListContainer) return;
+  starCardsListContainer.innerHTML = '';
+
+  const starCards = [];
+  decks.forEach((deck) => {
+    (deck.cards || []).forEach((card) => {
+      if (card && card.interval >= 30) {
+        starCards.push({ deckTitle: deck.title, card: card });
+      }
+    });
+  });
+
+  if (starCardsModalCount) {
+    starCardsModalCount.textContent = `${starCards.length}枚`;
+  }
+
+  if (starCards.length === 0) {
+    starCardsListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-sub);">現在、暗記レベル★のカードはありません。</div>`;
+    return;
+  }
+
+  starCards.forEach((item, idx) => {
+    const cardEl = document.createElement('div');
+    cardEl.className = 'card-item';
+    cardEl.innerHTML = `
+      <div class="card-item-info">
+        <div class="card-item-deck-title">from ${item.deckTitle}</div>
+        <div class="card-item-q">${idx + 1}. Q. ${item.card.question}</div>
+        <div class="card-item-a">A. ${item.card.answer}</div>
+        ${item.card.explanation ? `<div class="card-item-exp">解説: ${item.card.explanation}</div>` : ''}
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0;">
+        <div style="background-color: #8b5cf6; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em; font-weight: bold;">Lv.★</div>
+        <div style="font-size: 0.72em; color: var(--text-sub); margin-top: auto;">復習間隔: ${item.card.interval}日</div>
+      </div>
+    `;
+    starCardsListContainer.appendChild(cardEl);
+  });
+}
+
 function finishTypingUI() {
   if (!stopTime) stopTime = Date.now();
   const elapsedSeconds = ((stopTime - startTime) / 1000).toFixed(1);
@@ -3630,7 +3814,6 @@ function handleAnswer(rating) {
   markUserActivity();
   if (state !== 'ANSWERED' || !currentCard) return;
 
-  // 大元のデッキ内のカード実体と参照同期を担保
   if (currentDeck && currentDeck.cards) {
     const realCard = currentDeck.cards.find((c) => c.id === currentCard.id);
     if (realCard && realCard !== currentCard) {
@@ -3793,10 +3976,6 @@ function exitQuizToMenu() {
   showMenu();
 }
 
-/* =====================================================================
- * Undo / Redo（参照切れバグを完全解決）
- * ===================================================================== */
-
 function undoLastAnswer(event) {
   if (event) event.stopPropagation();
   markUserActivity();
@@ -3824,7 +4003,6 @@ function undoLastAnswer(event) {
     currentDeck = decks[deckIdx];
   }
 
-  // 大元のデッキ内のカード実体と参照を再接続（参照切れによるLv.0固定化を防止）
   if (currentDeck && currentDeck.cards) {
     currentCard = currentDeck.cards.find((c) => c.id === previousState.card.id) || previousState.card;
     studyQueue = previousState.queue.map((qc) => currentDeck.cards.find((c) => c.id === qc.id) || qc);
@@ -3866,7 +4044,6 @@ function redoLastAnswer(event) {
     currentDeck = decks[deckIdx];
   }
 
-  // 大元のデッキ内のカード実体と参照を再接続
   if (currentDeck && currentDeck.cards) {
     currentCard = currentDeck.cards.find((c) => c.id === nextState.card.id) || nextState.card;
     studyQueue = nextState.queue.map((qc) => currentDeck.cards.find((c) => c.id === qc.id) || qc);
@@ -3887,7 +4064,7 @@ function updateUndoRedoUI() {
 }
 
 /* =====================================================================
- * 16. 長押しジェスチャー制御
+ * 17. 長押しジェスチャー制御
  * ===================================================================== */
 
 function startHoldAction() {
@@ -3964,7 +4141,7 @@ function endHoldAction() {
 }
 
 /* =====================================================================
- * 17. グローバルイベントリスナー
+ * 18. グローバルイベントリスナー
  * ===================================================================== */
 
 function setupEventListeners() {
@@ -4083,7 +4260,7 @@ function setupEventListeners() {
     }
 
     const activeTag = document.activeElement ? document.activeElement.tagName : '';
-    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
 
     if (quizScreen && !quizScreen.classList.contains('hidden')) {
       const kb = userConfig.keyBinds || DEFAULT_KEY_BINDS;
