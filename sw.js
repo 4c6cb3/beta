@@ -3,10 +3,10 @@
  * memoly - サービスワーカー (sw.js)
  * ===================================================================== */
 
-// v9に更新してキャッシュを完全にリセット
-const CACHE_NAME = 'memoly-cache-v9';
+// v10に更新してキャッシュを完全にリセット
+const CACHE_NAME = 'memoly-cache-v10';
 
-const ASSETS_TO_CACHE = ['./', './index.html', './style.css?v=9', './app.js?v=9'];
+const ASSETS_TO_CACHE = ['./', './index.html', './style.css?v=10', './app.js?v=10'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

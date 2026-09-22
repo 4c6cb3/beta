@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
-    <link rel="stylesheet" href="style.css?v=9" />
+    <link rel="stylesheet" href="style.css?v=10" />
   </head>
   <body class="theme-device">
     <div class="container">
@@ -817,10 +817,10 @@
           </div>
 
           <!-- クイズ画面の「問題文全文表示」ボタントグル -->
-          <div class="option-group">
+          <div id="full-q-option-group" class="option-group">
             <h3>⚡ 問題文の一括表示機能</h3>
             <p class="help-text" style="margin-bottom: 10px">
-              読み上げ風モード等で、問題の要点が分かった際にワンタップで問題文全体を一括表示させるボタンをクイズ画面の上部（Undo/Redoの間）に配置します。
+              読み上げ風モードで、問題の要点が分かった際にワンタップで問題文全体を一括表示させるボタンをクイズ画面の上部（Undo/Redoの間）に配置します。
             </p>
             <div class="option-controls">
               <label class="radio-label">
@@ -832,6 +832,13 @@
                 <span>クイズ画面に「全文表示」ボタンを表示する</span>
               </label>
             </div>
+            <p
+              id="full-q-disabled-notice"
+              class="help-text"
+              style="color: #ef4444; font-size: 0.8em; margin-top: 6px; display: none;"
+            >
+              ※「読み上げ風モード」の場合のみ設定・利用が可能です。
+            </p>
           </div>
 
           <div class="option-group">
@@ -1574,6 +1581,6 @@
         });
       }
     </script>
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
   </body>
 </html>

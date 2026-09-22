@@ -991,31 +991,38 @@ function applyConfigUI() {
   document.documentElement.style.setProperty('--font-base', `${userConfig.fontSize}px`);
   document.documentElement.style.setProperty('--preview-font-size', `${tempFontSize}px`);
 
+  // テーマ設定
   const themeRadio = document.querySelector(`input[name="theme-option"][value="${userConfig.theme}"]`);
   if (themeRadio) themeRadio.checked = true;
 
+  // フォントサイズ設定
   if (fontSizeRange) fontSizeRange.value = tempFontSize;
   if (fontSizeValueDisplay) fontSizeValueDisplay.textContent = tempFontSize;
 
+  // モード設定（NORMAL / FAST）
   const modeRadio = document.querySelector(`input[name="mode-option"][value="${userConfig.mode}"]`);
   if (modeRadio) modeRadio.checked = true;
 
+  const isFastMode = userConfig.mode === 'FAST';
+  const isNormalMode = userConfig.mode === 'NORMAL';
+
   const modeDescEl = document.getElementById('mode-description-text');
   if (modeDescEl) {
-    if (userConfig.mode === 'NORMAL') modeDescEl.textContent = '問題文全表示の単語帳のようなモード。';
-    else if (userConfig.mode === 'FAST')
+    if (isNormalMode) modeDescEl.textContent = '問題文全表示の単語帳のようなモード。';
+    else if (isFastMode)
       modeDescEl.textContent = '問題文が1文字ずつ表示されるモード。早押しクイズの形式を再現。';
   }
 
+  // デッキ並び順
   const sortRadio = document.querySelector(`input[name="sort-option"][value="${userConfig.deckSortOrder}"]`);
   if (sortRadio) sortRadio.checked = true;
 
+  // 文字表示スピード設定（読み上げ風モードのみ操作可）
   if (charSpeedRange) charSpeedRange.value = userConfig.charSpeed;
   if (speedValueDisplay) speedValueDisplay.textContent = userConfig.charSpeed;
 
   const speedDisabledNotice = document.getElementById('speed-disabled-notice');
   if (speedOptionGroup) {
-    const isFastMode = userConfig.mode === 'FAST';
     if (charSpeedRange) charSpeedRange.disabled = !isFastMode;
     speedOptionGroup.style.opacity = isFastMode ? '1' : '0.4';
     speedOptionGroup.style.pointerEvents = isFastMode ? 'auto' : 'none';
@@ -1024,12 +1031,13 @@ function applyConfigUI() {
     else clearInterval(previewTimer);
   }
 
+  // 長押し文字送り設定
   const cbLongPress = document.getElementById('toggle-long-press');
   if (cbLongPress) cbLongPress.checked = userConfig.enableLongPress;
 
   const isLongPressGlobalEnabled = userConfig.enableLongPress;
-  const isNormalMode = userConfig.mode === 'NORMAL';
 
+  // 長押しスピード（問題文）
   const holdQGroup = document.getElementById('hold-q-group');
   const rangeHoldSpeedQ = document.getElementById('hold-speed-q-range');
   const dispHoldSpeedQ = document.getElementById('hold-speed-q-display');
@@ -1043,6 +1051,7 @@ function applyConfigUI() {
     holdQGroup.style.pointerEvents = shouldDisableQ ? 'none' : 'auto';
   }
 
+  // 長押しスピード（解答）
   const holdAGroup = document.getElementById('hold-a-group');
   const rangeHoldSpeedA = document.getElementById('hold-speed-a-range');
   const dispHoldSpeedA = document.getElementById('hold-speed-a-display');
@@ -1056,9 +1065,11 @@ function applyConfigUI() {
     holdAGroup.style.pointerEvents = shouldDisableA ? 'none' : 'auto';
   }
 
+  // カードレベル表示
   const cbCardLevel = document.getElementById('toggle-card-level');
   if (cbCardLevel) cbCardLevel.checked = userConfig.enableCardLevel;
 
+  // 復習機能・リザルト表示設定
   const cbReviewResult = document.getElementById('toggle-review-result');
   if (cbReviewResult) cbReviewResult.checked = !!userConfig.enableReviewResult;
 
@@ -1070,6 +1081,7 @@ function applyConfigUI() {
     reviewIntContainer.style.pointerEvents = userConfig.enableReviewResult ? 'auto' : 'none';
   }
 
+  // ゲーミフィケーション（称号機能）
   const cbGamification = document.getElementById('toggle-gamification');
   if (cbGamification) cbGamification.checked = !!userConfig.enableGamification;
 
@@ -1086,22 +1098,40 @@ function applyConfigUI() {
     }
   }
 
+  // テキスト選択の許可設定
   const cbTextSelection = document.getElementById('toggle-text-selection');
   if (cbTextSelection) cbTextSelection.checked = userConfig.enableTextSelection;
 
-  const cbEnableTags = document.getElementById('toggle-enable-tags');
-  if (cbEnableTags) cbEnableTags.checked = !!userConfig.enableTags;
-
+  // 問題文の一括全文表示ボタン（読み上げ風モード時のみ設定・利用可能）
+  const fullQOptionGroup = document.getElementById('full-q-option-group');
+  const fullQDisabledNotice = document.getElementById('full-q-disabled-notice');
   const cbShowFullQ = document.getElementById('toggle-show-full-q-btn');
-  if (cbShowFullQ) cbShowFullQ.checked = !!userConfig.enableShowFullQuestionBtn;
 
+  if (cbShowFullQ) {
+    cbShowFullQ.checked = !!userConfig.enableShowFullQuestionBtn;
+    cbShowFullQ.disabled = !isFastMode; // ノーマルモード時はチェックを無効化
+  }
+
+  if (fullQOptionGroup) {
+    fullQOptionGroup.style.opacity = isFastMode ? '1' : '0.4';
+    fullQOptionGroup.style.pointerEvents = isFastMode ? 'auto' : 'none';
+  }
+  if (fullQDisabledNotice) {
+    fullQDisabledNotice.style.display = isFastMode ? 'none' : 'block';
+  }
+
+  // クイズ画面の全文表示ボタンの出し分け
   if (fullQuestionBtn) {
-    if (userConfig.enableShowFullQuestionBtn) {
+    if (userConfig.enableShowFullQuestionBtn && isFastMode) {
       fullQuestionBtn.classList.remove('hidden');
     } else {
       fullQuestionBtn.classList.add('hidden');
     }
   }
+
+  // タグ機能設定
+  const cbEnableTags = document.getElementById('toggle-enable-tags');
+  if (cbEnableTags) cbEnableTags.checked = !!userConfig.enableTags;
 
   const tagManageBtnCont = document.getElementById('tag-management-btn-container');
   if (tagManageBtnCont) {
@@ -1112,6 +1142,7 @@ function applyConfigUI() {
     deckTagsSettingRow.style.display = userConfig.enableTags ? 'flex' : 'none';
   }
 
+  // キーボードショートカットボタンの表示更新
   updateKeyBindButtons();
 }
 
